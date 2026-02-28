@@ -4,10 +4,10 @@ Gem::Specification.new do |s|
   s.summary     = "Deterministic Multi-Agent Orchestrator"
   s.description = "A production-grade control plane for routing tasks to Claude, Codex, and Cursor with local planning."
   s.authors     = ["Antigravity"]
-  s.email       = ["antigravity@example.com"]
+  s.email       = ["shubhamtaywade82@gmail.com"]
   s.files       = Dir.glob("{bin,lib,config}/**/*") + ["README.md", "Gemfile"]
   s.executables = ["ares"]
-  s.homepage    = "https://github.com/example/agent-orchestrator"
+  s.homepage    = "https://github.com/shubhamtaywade82/agent-orchestrator"
   s.license     = "MIT"
 
   s.add_dependency "ollama-client", "~> 1.0"
