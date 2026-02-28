@@ -21,8 +21,8 @@ module Ares
       protected
 
       def execute_with_retry(cmd, prompt, options)
-        result = run_with_timeout(cmd, prompt)
-        return result unless should_retry?(*result)
+        output, status = run_with_timeout(cmd, prompt)
+        return [output, status] unless should_retry?(status, output)
 
         run_with_timeout(build_retry_command(cmd, prompt, **options), prompt)
       end
@@ -64,7 +64,7 @@ module Ares
       end
 
       def adapter_name
-        self.class.name.demodulize.remove_suffix('Adapter')
+        self.class.name.split('::').last.sub('Adapter', '')
       end
     end
   end
