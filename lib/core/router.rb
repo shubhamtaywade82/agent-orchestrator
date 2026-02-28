@@ -98,13 +98,8 @@ class Router
     adapter = build_adapter(selection[:engine])
 
     if options[:git]
-<<<<<<< Updated upstream
-      puts "🌿 Creating git branch for task..."
-      GitManager.create_branch(@logger.task_id)
-=======
       puts '🌿 Creating git branch for task...'
       GitManager.create_branch(@logger.task_id, task)
->>>>>>> Stashed changes
     end
 
     QuotaManager.increment_usage(selection[:engine])

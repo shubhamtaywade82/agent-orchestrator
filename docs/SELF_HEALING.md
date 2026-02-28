@@ -27,6 +27,14 @@ Triggered by: `bin/ares "lint project"`
 - First attempts a standard `rubocop -A` (auto-correct).
 - If offenses remain, Ares escalates to the AI to perform deep refactors (e.g., splitting a method that is too long).
 
+## 🌳 Git Hygiene & Branching
+
+Ares is designed to follow project best practices automatically:
+
+- **Flat History**: New task branches always originate from the base branch (`main` or `master`), preventing messy nested branching.
+- **Human-Readable Names**: Branches are named `task-[UUID]-[slug]`, where the slug is derived from your task description (e.g., `task-89ba-add-docs-references`).
+- **Auto-Commits**: Upon successful completion, Ares automatically stages and commits your changes to the task branch, ensuring no work is lost.
+
 ## 🛡️ Safety Boundaries
 
 To prevent "AI hallucinations" from corrupting the orchestrator:
