@@ -18,6 +18,6 @@ gem 'tty-table'
 gem 'yaml'
 
 gem 'rubocop'
-gem 'rubocop-rspec'
-gem 'rubocop-rake'
 gem 'rubocop-performance'
+gem 'rubocop-rake'
+gem 'rubocop-rspec'
