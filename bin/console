@@ -1,7 +1,9 @@
 #!/usr/bin/env ruby
-require "bundler/setup"
-require "ares_runtime"
-require "irb"
+# frozen_string_literal: true
+
+require 'bundler/setup'
+require 'ares_runtime'
+require 'irb'
 
 ARGV.clear
 IRB.start

@@ -1,5 +1,7 @@
-require "ollama_client"
-require_relative "../../config/planner_schema"
+# frozen_string_literal: true
+
+require 'ollama_client'
+require_relative '../../config/planner_schema'
 
 class OllamaPlanner
   def initialize
@@ -17,14 +19,14 @@ class OllamaPlanner
 
   def build_prompt(task)
     <<~PROMPT
-    Analyze the following engineering task.
-    Decompose it into discrete, executable work units (slices).
-    Assign a task type, risk level, and confidence score.
+      Analyze the following engineering task.
+      Decompose it into discrete, executable work units (slices).
+      Assign a task type, risk level, and confidence score.
 
-    TASK:
-    #{task}
+      TASK:
+      #{task}
 
-    Respond strictly as JSON. Slices should be a clean array of strings.
+      Respond strictly as JSON. Slices should be a clean array of strings.
     PROMPT
   end
 end

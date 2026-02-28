@@ -1,19 +1,21 @@
-require_relative "../planner/ollama_planner"
-require_relative "../planner/tiny_task_processor"
-require_relative "context_loader"
-require_relative "model_selector"
-require_relative "task_logger"
-require_relative "quota_manager"
-require_relative "git_manager"
-require_relative "terminal_runner"
-require_relative "config_manager"
-require_relative "../adapters/claude_adapter"
-require_relative "../adapters/codex_adapter"
-require_relative "../adapters/cursor_adapter"
-require_relative "../adapters/ollama_adapter"
-require "tty-spinner"
-require "tty-table"
-require "tty-prompt"
+# frozen_string_literal: true
+
+require_relative '../planner/ollama_planner'
+require_relative '../planner/tiny_task_processor'
+require_relative 'context_loader'
+require_relative 'model_selector'
+require_relative 'task_logger'
+require_relative 'quota_manager'
+require_relative 'git_manager'
+require_relative 'terminal_runner'
+require_relative 'config_manager'
+require_relative '../adapters/claude_adapter'
+require_relative '../adapters/codex_adapter'
+require_relative '../adapters/cursor_adapter'
+require_relative '../adapters/ollama_adapter'
+require 'tty-spinner'
+require 'tty-table'
+require 'tty-prompt'
 
 class Router
   def initialize
@@ -25,13 +27,13 @@ class Router
     puts "Task ID: #{@logger.task_id}"
 
     if QuotaManager.quota_exceeded?
-      puts "❌ Quota exceeded for Claude. Please try again later or use a different engine."
+      puts '❌ Quota exceeded for Claude. Please try again later or use a different engine.'
       exit 1
     end
 
     # Initialize tiny task processor and spinner
     @tiny_processor = TinyTaskProcessor.new
-    @spinner = TTY::Spinner.new("[:spinner] :title", format: :dots)
+    @spinner = TTY::Spinner.new('[:spinner] :title', format: :dots)
 
     # Special handling for diagnostic tasks (tests, fixes, diagnostics)
     return run_test_diagnostic(options) if /(run )?(test|rspec|fix|diagnostic)/i.match?(task)
@@ -41,13 +43,13 @@ class Router
     return run_lint(options) if /lint|format|style/i.match?(task)
 
     plan = nil
-    @spinner.update(title: "Planning task with Ollama...")
+    @spinner.update(title: 'Planning task with Ollama...')
     @spinner.run do
       plan = @planner.plan(task)
     end
 
     selection = nil
-    @spinner.update(title: "Selecting optimal model...")
+    @spinner.update(title: 'Selecting optimal model...')
     @spinner.run do
       selection = ModelSelector.select(plan)
     end
@@ -56,18 +58,17 @@ class Router
 
     if plan['confidence'].to_f < 0.7
       prompt = TTY::Prompt.new
-      choice = prompt.select("Low confidence detected. How should we proceed?",
-        "Execute with suggested #{selection[:engine]} (#{selection[:model] || 'default'})",
-        "Override and use Claude Opus",
-        "Abort task"
-      )
+      choice = prompt.select('Low confidence detected. How should we proceed?',
+                             "Execute with suggested #{selection[:engine]} (#{selection[:model] || 'default'})",
+                             'Override and use Claude Opus',
+                             'Abort task')
 
       case choice
       when /Override/
-        selection = { engine: :claude, model: "opus" }
-        puts "Overridden: Using Claude Opus."
+        selection = { engine: :claude, model: 'opus' }
+        puts 'Overridden: Using Claude Opus.'
       when /Abort/
-        puts "Task aborted by user."
+        puts 'Task aborted by user.'
         return
       end
     end
@@ -75,12 +76,12 @@ class Router
     puts "Engine Selected: #{selection[:engine]} (#{selection[:model] || 'default'})"
 
     if plan['slices']&.any?
-      puts "Slices:"
+      puts 'Slices:'
       plan['slices'].each { |s| puts " - #{s}" }
     end
 
     if options[:dry_run]
-      puts "--- DRY RUN MODE ---"
+      puts '--- DRY RUN MODE ---'
       @logger.log_task(task, plan, selection)
       return
     end
@@ -103,7 +104,7 @@ class Router
     @logger.log_result(result)
 
     if options[:git]
-      puts "💾 Committing changes to git..."
+      puts '💾 Committing changes to git...'
       GitManager.commit_changes(@logger.task_id, task)
     end
 
@@ -250,7 +251,7 @@ class Router
       puts result['explanation']
     end
 
-    @spinner.update(title: "Verifying fix...")
+    @spinner.update(title: 'Verifying fix...')
     verify_result = nil
     @spinner.run { verify_result = TerminalRunner.run(verify_command) }
 

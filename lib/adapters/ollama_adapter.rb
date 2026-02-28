@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'ollama_client'
 require_relative '../core/config_manager'
 

@@ -1,4 +1,6 @@
-require "tty-command"
+# frozen_string_literal: true
+
+require 'tty-command'
 
 class TerminalRunner
   def self.run(cmd)

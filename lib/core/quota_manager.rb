@@ -1,9 +1,11 @@
-require "json"
-require "date"
+# frozen_string_literal: true
+
+require 'json'
+require 'date'
 
 class QuotaManager
-  QUOTA_FILE = File.expand_path("../../.quota.json", __dir__)
-  LIMITS = { claude: 50, codex: 100 }
+  QUOTA_FILE = File.expand_path('../../.quota.json', __dir__)
+  LIMITS = { claude: 50, codex: 100 }.freeze
 
   def self.usage
     data = load_data
@@ -34,10 +36,9 @@ class QuotaManager
     remaining_quota <= 0
   end
 
-  private
-
   def self.load_data
     return {} unless File.exist?(QUOTA_FILE)
+
     JSON.parse(File.read(QUOTA_FILE))
   rescue JSON::ParserError
     {}

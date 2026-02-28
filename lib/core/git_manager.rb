@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class GitManager
   def self.create_branch(task_id, task_description = nil)
     # Default to main or master as base branch

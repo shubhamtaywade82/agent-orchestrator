@@ -1,16 +1,17 @@
+# frozen_string_literal: true
 source "https://rubygems.org"
 
 gemspec
 
-gem "ollama-client"
 gem "json"
-gem "yaml"
+gem "ollama-client"
 gem "rspec"
+gem "yaml"
 gem "tty-prompt"
-gem "tty-spinner"
 gem "tty-command"
-gem "tty-table"
+gem "tty-spinner"
 gem "tty-screen"
+gem "tty-table"
 gem "tty-box"
-gem "tty-cursor"
-gem "dotenv"
+gem "dotenv"gem "tty-cursor"
+

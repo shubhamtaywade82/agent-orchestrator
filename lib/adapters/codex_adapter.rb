@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'English'
 class CodexAdapter
   def call(prompt, _model = nil)

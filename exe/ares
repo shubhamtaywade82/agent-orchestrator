@@ -1,22 +1,23 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "ares_runtime"
-require "optparse"
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+require 'ares_runtime'
+require 'optparse'
 
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: ares [options] \"task description\""
+  opts.banner = 'Usage: ares [options] "task description"'
 
-  opts.on("-d", "--dry-run", "Plan without execution") do |d|
+  opts.on('-d', '--dry-run', 'Plan without execution') do |d|
     options[:dry_run] = d
   end
 
-  opts.on("-g", "--git", "Enable git auto-branching/committing") do |g|
+  opts.on('-g', '--git', 'Enable git auto-branching/committing') do |g|
     options[:git] = g
   end
 
-  opts.on("--tui", "Launch interactive TUI") do |t|
+  opts.on('--tui', 'Launch interactive TUI') do |t|
     options[:tui] = t
   end
 end.parse!
@@ -26,10 +27,10 @@ if options[:tui]
   exit
 end
 
-task = ARGV.join(" ")
+task = ARGV.join(' ')
 
 if task.empty?
-  puts "Usage: ares [options] \"task description\""
+  puts 'Usage: ares [options] "task description"'
   exit 1
 end
 

@@ -1,12 +1,14 @@
-require "securerandom"
-require "json"
+# frozen_string_literal: true
+
+require 'securerandom'
+require 'json'
 
 class TaskLogger
   attr_reader :task_id
 
   def initialize
     @task_id = SecureRandom.uuid
-    @log_dir = File.expand_path("../../logs", __dir__)
+    @log_dir = File.expand_path('../../logs', __dir__)
     Dir.mkdir(@log_dir) unless Dir.exist?(@log_dir)
   end
 

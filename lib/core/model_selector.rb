@@ -1,23 +1,23 @@
-require "yaml"
-require_relative "config_manager"
+# frozen_string_literal: true
+
+require 'yaml'
+require_relative 'config_manager'
 
 class ModelSelector
   CONFIDENCE_THRESHOLD = 0.7
-  CONFIG_PATH = File.expand_path("../../config/models.yml", __dir__)
+  CONFIG_PATH = File.expand_path('../../.config/models.yml', __dir__)
 
   def self.select(plan)
     @config = Ares::Runtime::ConfigManager.load_models
 
-    task_type = plan["task_type"]
-    confidence = plan["confidence"] || 1.0
+    task_type = plan['task_type']
+    confidence = plan['confidence'] || 1.0
 
     # Escalate if confidence is low or risk is explicitly high
-    if confidence < CONFIDENCE_THRESHOLD || plan["risk_level"] == "high"
-      return { engine: :claude, model: "opus" }
-    end
+    return { engine: :claude, model: 'opus' } if confidence < CONFIDENCE_THRESHOLD || plan['risk_level'] == 'high'
 
     # Use string key lookup as ConfigManager returns keys as strings sometimes
-    rule = @config[task_type.to_s] || @config["refactor"]
+    rule = @config[task_type.to_s] || @config['refactor']
 
     {
       engine: rule[:engine].to_sym,

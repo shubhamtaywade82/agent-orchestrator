@@ -1,3 +1,5 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
+
 # Local development stub pointing to exe/ares
 load File.expand_path('../exe/ares', __dir__)
