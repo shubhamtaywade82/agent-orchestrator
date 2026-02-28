@@ -132,34 +132,40 @@ module Ares
       end
 
       def configure_settings
-        system('clear')
-        puts '--- ⚙️ ARES CONFIGURATION MODE ---'
+        loop do
+          system('clear')
+          puts '--- ⚙️ ARES CONFIGURATION MODE ---'
 
-        task_types = ConfigManager.task_types
-        task_type = @prompt.select('Select task type to configure:', task_types + ['Back'])
-        return if task_type == 'Back'
+          task_types = ConfigManager.task_types
+          task_type = @prompt.select('Select task type to configure:', task_types + ['Exit to Dashboard'])
+          break if task_type == 'Exit to Dashboard'
 
-        current_config = ConfigManager.load[task_type]
-        puts "\nCurrent config for #{task_type}: #{current_config[:engine]} (#{current_config[:model] || 'default'})"
+          current_config = ConfigManager.load[task_type]
+          puts "\nCurrent config for #{task_type}: #{current_config[:engine]} (#{current_config[:model] || 'default'})"
 
-        engine = @prompt.select('Select engine:', %w[claude codex cursor ollama])
+          engine_options = %w[claude codex cursor ollama] + ['Back']
+          engine = @prompt.select('Select engine:', engine_options)
+          next if engine == 'Back'
 
-        model = case engine
-                when 'claude'
-                  @prompt.select('Select model:', %w[opus sonnet haiku])
-                when 'ollama'
-                  OllamaAdapter.new.send(:best_available_model) # Trigger discovery
-                  available = Ollama::Client.new.list_model_names
-                  @prompt.select('Select model (discovered):', available)
-                else
-                  @prompt.ask('Enter model name (or leave empty for default):')
-                end
+          model = case engine
+                  when 'claude'
+                    @prompt.select('Select model:', %w[opus sonnet haiku Back])
+                  when 'ollama'
+                    OllamaAdapter.new.send(:best_available_model) # Trigger discovery
+                    available = Ollama::Client.new.list_model_names
+                    @prompt.select('Select model (discovered):', available + ['Back'])
+                  else
+                    @prompt.ask('Enter model name (or leave empty for default, type "back" to cancel):')
+                  end
 
-        model = nil if model.to_s.strip.empty?
+          next if model == 'Back' || model.to_s.downcase == 'back'
 
-        ConfigManager.update_task_config(task_type, engine, model)
-        puts "\n✅ Configuration updated for #{task_type}!"
-        @prompt.keypress('Press any key to return to dashboard...')
+          model = nil if model.to_s.strip.empty?
+
+          ConfigManager.update_task_config(task_type, engine, model)
+          puts "\n✅ Configuration updated for #{task_type}!"
+          sleep 1
+        end
       end
     end
   end

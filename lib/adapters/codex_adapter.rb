@@ -1,6 +1,9 @@
 class CodexAdapter
   def call(prompt, _model = nil)
-    `codex exec "#{escape(prompt)}"`
+    output = `codex exec "#{escape(prompt)}"`
+    raise "Codex command failed: #{output}" unless $?.success?
+
+    output
   end
 
   private

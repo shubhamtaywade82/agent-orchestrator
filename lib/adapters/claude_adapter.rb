@@ -1,7 +1,10 @@
 class ClaudeAdapter
   def call(prompt, model)
     model ||= 'sonnet'
-    `claude --model #{model} "#{escape(prompt)}"`
+    output = `claude --model #{model} "#{escape(prompt)}"`
+    raise "Claude command failed: #{output}" unless $?.success?
+
+    output
   end
 
   private
