@@ -1,5 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+# Ensure project lib is loaded first when run directly (without bundle exec)
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+
 # Local development stub pointing to exe/ares
 load File.expand_path('../exe/ares', __dir__)

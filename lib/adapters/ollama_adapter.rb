@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'ollama_client'
-require_relative '../core/config_manager'
+require_relative '../ares/runtime/config_manager'
 
 class OllamaAdapter
   def initialize

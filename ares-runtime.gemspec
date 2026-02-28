@@ -20,4 +20,6 @@ Gem::Specification.new do |s|
   s.add_dependency 'ollama-client', '~> 1.0'
   s.add_dependency 'yaml'
   s.metadata['rubygems_mfa_required'] = 'true'
+
+  s.required_ruby_version = '>= 2.7.0'
 end

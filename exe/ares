@@ -21,23 +21,23 @@ module Ares
     end
 
     def self.init
-      Initializer.run
+      Ares::Runtime::Initializer.run
     end
 
     def self.config
-      ConfigCLI.run
+      Ares::Runtime::ConfigCLI.run
     end
 
     def self.doctor
-      Doctor.run
+      Ares::Runtime::Doctor.run
     end
 
     def self.version
-      puts "Ares v#{VERSION}"
+      puts "Ares v#{Ares::Runtime::VERSION}"
     end
 
     def self.logs
-      LogsCLI.run
+      Ares::Runtime::LogsCLI.run
     end
 
     def self.run_task(first_arg)

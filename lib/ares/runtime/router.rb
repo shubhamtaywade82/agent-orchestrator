@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative '../planner/ollama_planner'
-require_relative '../planner/tiny_task_processor'
+require_relative 'planner/ollama_planner'
+require_relative 'planner/tiny_task_processor'
 require_relative 'context_loader'
 require_relative 'model_selector'
 require_relative 'task_logger'
@@ -9,17 +9,17 @@ require_relative 'quota_manager'
 require_relative 'git_manager'
 require_relative 'terminal_runner'
 require_relative 'config_manager'
-require_relative '../adapters/claude_adapter'
-require_relative '../adapters/codex_adapter'
-require_relative '../adapters/cursor_adapter'
-require_relative '../adapters/ollama_adapter'
+require_relative '../../adapters/claude_adapter'
+require_relative '../../adapters/codex_adapter'
+require_relative '../../adapters/cursor_adapter'
+require_relative '../../adapters/ollama_adapter'
 require 'tty-spinner'
 require 'tty-table'
 require 'tty-prompt'
 
 class Router
   def initialize
-    @planner = OllamaPlanner.new
+    @planner = Ares::Runtime::OllamaPlanner.new
     @logger = TaskLogger.new
   end
 

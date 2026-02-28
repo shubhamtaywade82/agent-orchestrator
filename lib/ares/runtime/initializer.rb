@@ -22,8 +22,7 @@ module Ares
       end
 
       def self.copy_default(file, target)
-        gem_root = Gem::Specification.find_by_name('agent-orchestrator').gem_dir
-        source = File.join(gem_root, 'config', file)
+        source = ConfigManager.gem_default_path(file)
         FileUtils.cp(source, File.join(target, file)) if File.exist?(source)
       end
     end
