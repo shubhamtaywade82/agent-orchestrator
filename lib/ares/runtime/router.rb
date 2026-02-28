@@ -4,16 +4,13 @@ module Ares
   module Runtime
     class Router
       def initialize
-        @ollama_healthy = OllamaClientFactory.health_check?
-        @planner = OllamaPlanner.new(healthy: @ollama_healthy)
-        @logger = TaskLogger.new
+        @core = CoreSubsystem.new
       end
 
       def run(task, options = {})
-        puts "Task ID: #{@logger.task_id}"
+        puts "Task ID: #{@core.logger.task_id}"
         check_quota!
 
-        @tiny_processor = Ares::Runtime::TinyTaskProcessor.new(healthy: @ollama_healthy)
         @spinner = TTY::Spinner.new('[:spinner] :title', format: :dots)
 
         shortcut_result = match_shortcut_task(task, options)
@@ -62,11 +59,11 @@ module Ares
           # Fallback to LLM only if fast-path failed to identify files
           if summary['files'].empty? || summary['failed_items'].empty?
             @spinner.update(title: "#{title} failed. LLM Fallback (Slow)...")
-            summary = @tiny_processor.summarize_output(result[:output], type: type)
+            summary = @core.tiny_processor.summarize_output(result[:output], type: type)
           end
         rescue StandardError => e
           @spinner.update(title: "#{title} failed. Error in fast-path: #{e.message}. LLM Fallback...")
-          summary = @tiny_processor.summarize_output(result[:output], type: type)
+          summary = @core.tiny_processor.summarize_output(result[:output], type: type)
         end
 
         puts "\n--- Diagnostic Summary (#{type.to_s.upcase}) ---"
@@ -106,7 +103,7 @@ module Ares
 
           @spinner.update(title: 'Summarizing remaining offenses...')
           current_summary = nil
-          @spinner.run { current_summary = @tiny_processor.summarize_output(verify_result[:output], type: :lint) }
+          @spinner.run { current_summary = @core.tiny_processor.summarize_output(verify_result[:output], type: :lint) }
 
           puts "\n--- Remaining offenses ---"
           table = TTY::Table.new(header: %w[Attribute Value])
@@ -147,7 +144,9 @@ module Ares
       end
 
       def match_shortcut_task(task, options)
-        return run_test_diagnostic(options) if task.match?(/\A(run\s+|check\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
+        if task.match?(/\A(run\s+|check\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
+          return run_test_diagnostic(options)
+        end
         return run_syntax_check(options) if task.match?(/\A(run\s+|check\s+)?(syntax|compile)(\s+check)?\s*\z/i)
         return run_lint(options) if task.match?(/\A(run\s+|check\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
 
@@ -157,7 +156,7 @@ module Ares
       def plan_task(task)
         plan = nil
         @spinner.update(title: 'Planning task...')
-        @spinner.run { plan = @planner.plan(task) }
+        @spinner.run { plan = @core.planner.plan(task) }
         plan
       end
 
@@ -191,100 +190,55 @@ module Ares
         puts "Engine Selected: #{selection[:engine]} (#{selection[:model] || 'default'})"
         return if options[:dry_run] && puts('--- DRY RUN MODE ---')
 
-        @logger.log_task(task, plan, selection)
-        GitManager.create_branch(@logger.task_id, task) if options[:git]
+        @core.logger.log_task(task, plan, selection)
+        GitManager.create_branch(@core.logger.task_id, task) if options[:git]
 
-        capable_engines = %i[claude codex cursor]
-        initial_engine = selection[:engine]&.to_sym || :claude
+        capable_engines = %w[claude codex cursor]
+        initial_engine = selection[:engine]&.to_s || 'claude'
         fallback_chain = ([initial_engine] + (capable_engines - [initial_engine])).uniq
 
-        attempts = 0
-        fallback_chain.each do |current_engine|
-          attempts += 1
-          if attempts > 1
-            puts "Falling back to #{current_engine} (attempt #{attempts}/#{fallback_chain.size})..."
-          else
-            puts "Executing task via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})..."
-          end
+        chain = EngineChain.build(fallback_chain)
+        prompt = PromptBuilder.new
+                              .add_context(ContextLoader.load)
+                              .add_task(task)
+                              .build
 
-          begin
-            QuotaManager.increment_usage(current_engine)
-            result = call_adapter_with_persistence(current_engine, "#{ContextLoader.load}\n\nTASK:\n#{task}", selection)
+        adapter_opts = { model: selection[:model], fork_session: true, resume: true, cloud: options[:cloud] }
 
-            @logger.log_result(result)
-            GitManager.commit_changes(@logger.task_id, task) if options[:git]
-            puts result
-            return
-          rescue StandardError => e
-            puts "\n⚠️ #{current_engine} failed during initial execution: #{e.message.split("\n").first.strip}"
-            next unless attempts >= fallback_chain.size
+        output = chain.call(prompt, adapter_opts, total: fallback_chain.size)
+        @core.logger.log_result(output)
 
-            raise "Task execution failed after #{attempts} attempts. Last error: #{e.message}"
-          end
-        end
+        GitManager.commit_changes(@core.logger.task_id, task) if options[:git]
+        puts output
       end
 
       def generate_fix_prompt(summary, options)
         type = options[:type] || :test
-        context = ContextLoader.load
-        files_content = Array(summary['files']).filter_map do |f|
-          path = File.expand_path(f['path'], Dir.pwd)
-          "--- FILE: #{f['path']} ---\n#{File.read(path)}\n" if File.exist?(path)
-        end.join("\n")
 
-        <<~PROMPT
-          #{context}
-          DIAGNOSTIC SUMMARY (#{type.to_s.upcase}):
-          Failed Items: #{Array(summary['failed_items'] || summary['failed_tests']).join(', ')}
-          Error: #{summary['error_summary']}
+        builder = PromptBuilder.new
+                               .add_context(ContextLoader.load)
+                               .add_diagnostic(type, summary['failed_items'] || summary['failed_tests'], summary['error_summary'])
+                               .add_instruction("TASK: Fix the #{type} failures identifying above.")
 
-          TASK: Fix the #{type} failures identifying above.
-          #{'Fix ONLY the first offense listed.' if options[:fix_first_only]}
-          You MUST provide JSON with 'explanation' and 'patches' (with 'file' and 'content' fields).
+        builder.add_instruction('Fix ONLY the first offense listed.') if options[:fix_first_only]
 
-          FAILING FILE CONTENTS:
-          #{files_content}
-        PROMPT
+        builder.add_instruction("You MUST provide JSON with 'explanation' and 'patches' (with 'file' and 'content' fields).")
+               .add_files(summary['files'])
+               .build
       end
 
       def apply_fix_with_fallbacks(fix_prompt, selection)
-        capable_engines = %i[claude codex cursor]
-        initial_engine = selection[:engine]&.to_sym || :claude
+        capable_engines = %w[claude codex cursor]
+        initial_engine = selection[:engine]&.to_s || 'claude'
         fallback_chain = ([initial_engine] + (capable_engines - [initial_engine])).uniq
 
-        attempts = 0
-        fallback_chain.each do |current_engine|
-          attempts += 1
-          if attempts > 1
-            puts "Falling back to #{current_engine} for fix (attempt #{attempts}/#{fallback_chain.size})..."
-          else
-            puts "Applying fix via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})..."
-          end
+        chain = EngineChain.build(fallback_chain)
+        adapter_opts = { model: selection[:model], fork_session: true, resume: true }
+
+        raw = chain.call_fix(fix_prompt, adapter_opts, total: fallback_chain.size) do |current_engine|
           create_checkpoint(current_engine)
-
-          begin
-            raw = call_adapter_with_persistence(current_engine, fix_prompt, selection)
-            return JSON.parse(raw)
-          rescue StandardError => e
-            puts "\n⚠️ #{current_engine} failed: #{e.message.split("\n").first.strip}"
-            next unless attempts >= fallback_chain.size
-
-            raise "Escalation failed after #{attempts} attempts. Last error: #{e.message}"
-          end
         end
-        nil
-      end
-
-      def call_adapter_with_persistence(engine, prompt, selection)
-        adapter = build_adapter(engine)
-        model = engine == selection[:engine] ? selection[:model] : nil
-
-        case engine
-        when :claude then adapter.call(prompt, model, fork_session: true)
-        when :cursor then adapter.call(prompt, model, resume: true)
-        when :codex then adapter.call(prompt, model, resume: true)
-        else adapter.call(prompt, model)
-        end
+        JSON.parse(raw)
       end
 
       def apply_patches(result)
@@ -325,17 +279,6 @@ module Ares
 
       def run_lint(options)
         run_diagnostic_loop('bundle exec rubocop -A', options.merge(type: :lint, title: 'Running RuboCop'))
-      end
-
-      def build_adapter(engine)
-        case engine
-        when :claude then ClaudeAdapter.new
-        when :codex then CodexAdapter.new
-        when :cursor then CursorAdapter.new
-        when :ollama then OllamaAdapter.new
-        else
-          raise "Unsupported engine: #{engine}. Check your config/ares/models.yml"
-        end
       end
     end
   end

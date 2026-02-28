@@ -52,19 +52,23 @@ module Ares
       end
 
       def build_summary_prompt(truncated, type)
-        case type
-        when :lint then "Summarize RuboCop offenses. Extract file paths and line numbers:\n\n#{truncated}"
-        when :syntax then "Summarize Ruby syntax errors. Extract file paths and line numbers:\n\n#{truncated}"
-        else "Summarize RSpec failures. Extract file paths and line numbers:\n\n#{truncated}"
-        end
+        instruction = case type
+                      when :lint then 'Summarize RuboCop offenses. Extract file paths and line numbers:'
+                      when :syntax then 'Summarize Ruby syntax errors. Extract file paths and line numbers:'
+                      else 'Summarize RSpec failures. Extract file paths and line numbers:'
+                      end
+
+        PromptBuilder.new
+                     .add_instruction(instruction)
+                     .add_instruction(truncated)
+                     .build
       end
 
       def build_diff_prompt(diff)
-        <<~PROMPT
-          Summarize the following git diff. Identify modified files, describe the core changes, and assess the risk level.
-
-          #{diff}
-        PROMPT
+        PromptBuilder.new
+                     .add_instruction('Summarize the following git diff. Identify modified files, describe the core changes, and assess the risk level.')
+                     .add_instruction(diff)
+                     .build
       end
 
       def summary_schema

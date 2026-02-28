@@ -1,24 +1,25 @@
 # frozen_string_literal: true
 
-require 'open3'
+require_relative 'base_adapter'
 
 module Ares
   module Runtime
     # Adapter for Claude CLI. Passes prompts via stdin to avoid ARG_MAX limits.
-    class ClaudeAdapter
-      def call(prompt, model, fork_session: false)
+    class ClaudeAdapter < BaseAdapter
+      def call(prompt, model = nil, fork_session: false, **_options)
         check_auth!
-        model ||= 'sonnet'
+        super(prompt, model, fork_session: fork_session)
+      end
 
+      protected
+
+      def build_command(_prompt, model, fork_session: false, **_options)
+        model ||= 'sonnet'
         # -p - means read prompt from stdin
         # --allow-dangerously-skip-permissions bypasses interactive prompts
         cmd = ['claude', '--model', model, '-p', '-', '--allow-dangerously-skip-permissions']
         cmd += %w[--continue --fork-session] if fork_session
-
-        output, status = Open3.capture2e(*cmd, stdin_data: prompt)
-        raise "Claude command failed: #{output}" unless status.success?
-
-        output
+        cmd
       end
 
       private

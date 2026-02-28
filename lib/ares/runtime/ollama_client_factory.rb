@@ -32,10 +32,8 @@ module Ares
       end
 
       # Executes an Ollama call with a hard timeout and a provided fallback block.
-      def self.with_resilience(hard_timeout: 15, fallback_value: nil)
-        Timeout.timeout(hard_timeout) do
-          yield
-        end
+      def self.with_resilience(hard_timeout: 15, fallback_value: nil, &block)
+        Timeout.timeout(hard_timeout, &block)
       rescue StandardError, Timeout::Error => e
         puts "\n⚠️ Local AI (Ollama) Failure: #{e.message.split("\n").first}. Triggering Safe Mode fallback."
         fallback_value
