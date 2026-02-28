@@ -21,7 +21,7 @@ Gem::Specification.new do |s|
 
   s.add_dependency 'dotenv'
   s.add_dependency 'json'
-  s.add_dependency 'ollama-client', '~> 0.2'
+  s.add_dependency 'ollama-client', '>= 1.0'
   s.add_dependency 'tty-box'
   s.add_dependency 'tty-command'
   s.add_dependency 'tty-cursor'
