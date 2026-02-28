@@ -232,24 +232,25 @@ module Ares
           #{Array(summary['files']).filter_map { |f| f['path'] }.uniq.join("\n")}
         PROMPT
 
-        adapter = build_adapter(selection[:engine])
+        capable_engines = %i[claude codex cursor]
+        initial_engine = selection[:engine]&.to_sym || :claude
+        # Create chain: initial engine first, then others in preferred sequence
+        fallback_chain = ([initial_engine] + (capable_engines - [initial_engine])).uniq
 
         result = nil
         attempts = 0
-        max_attempts = 2
+        max_attempts = fallback_chain.size
 
         @spinner.run do
+          current_engine = fallback_chain[attempts]
+          @spinner.update(title: "Applying fix via #{current_engine} (attempt #{attempts + 1}/#{max_attempts})...")
+
+          adapter = build_adapter(current_engine)
+          # Use custom model only for the first engine in the chain if it was explicitly selected
+          current_model = (attempts.zero? && current_engine == initial_engine) ? selection[:model] : nil
+
+          raw = adapter.call(fix_prompt, current_model)
           attempts += 1
-          @spinner.update(title: "Applying fix via #{selection[:engine]} (attempt #{attempts})...")
-
-          if selection[:engine] == :ollama
-            # Should not happen with current ModelSelector, but as a double-guard:
-            selection[:engine] = :claude
-            selection[:model] = 'sonnet'
-          end
-
-          adapter = build_adapter(selection[:engine])
-          raw = adapter.call(fix_prompt, selection[:model])
 
           result = begin
             JSON.parse(raw)
@@ -257,14 +258,14 @@ module Ares
             { 'explanation' => raw, 'patches' => [] }
           end
         rescue StandardError => e
-          raise "Escalation failed after #{attempts} attempts. Last error: #{e.message}" unless attempts < max_attempts
-
-          # Pick fallback: prefer Codex if Claude fails, or vice-versa
-          fallback_engine = selection[:engine] == :claude ? :codex : :claude
-          puts "\n⚠️ #{selection[:engine]} failed: #{e.message.split("\n").first}. Retrying with #{fallback_engine}..."
-          selection[:engine] = fallback_engine
-          selection[:model] = nil # Use default for fallback
-          retry
+          attempts += 1
+          if attempts < max_attempts
+            next_engine = fallback_chain[attempts]
+            puts "\n⚠️ #{fallback_chain[attempts - 1]} failed: #{e.message.split("\n").first.strip}. Retrying with #{next_engine}..."
+            retry
+          else
+            raise "Escalation failed after #{attempts} attempts. Last error: #{e.message}"
+          end
         end
 
         if result['patches']&.any?
