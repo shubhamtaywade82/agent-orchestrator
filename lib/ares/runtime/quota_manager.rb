@@ -4,7 +4,8 @@ require 'json'
 require 'date'
 
 class QuotaManager
-  QUOTA_FILE = File.expand_path('../../.quota.json', __dir__)
+  GLOBAL_DIR = File.expand_path('~/.ares')
+  QUOTA_FILE = File.expand_path("#{GLOBAL_DIR}/.quota.json", __dir__)
   LIMITS = { claude: 50, codex: 100 }.freeze
 
   def self.usage

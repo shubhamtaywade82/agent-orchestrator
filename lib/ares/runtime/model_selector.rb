@@ -16,7 +16,8 @@ class ModelSelector
     return { engine: :claude, model: 'opus' } if confidence < CONFIDENCE_THRESHOLD || plan['risk_level'] == 'high'
 
     # Use string key lookup as ConfigManager returns keys as strings sometimes
-    rule = @config[task_type.to_s] || @config['refactor']
+    rule = @config[task_type.to_sym] || @config[:refactor]
+
 
     {
       engine: rule[:engine].to_sym,

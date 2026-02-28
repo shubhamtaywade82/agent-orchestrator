@@ -12,6 +12,7 @@ bulk_patch:
 
 test_generation:
   engine: codex
+  model: default
 
 summarization:
   engine: claude

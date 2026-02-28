@@ -35,12 +35,11 @@ class Router
     @tiny_processor = TinyTaskProcessor.new
     @spinner = TTY::Spinner.new('[:spinner] :title', format: :dots)
 
-    # Special handling for diagnostic tasks (tests, fixes, diagnostics)
-    return run_test_diagnostic(options) if /(run )?(test|rspec|fix|diagnostic)/i.match?(task)
-
-    return run_syntax_check(options) if /syntax|compile/i.match?(task)
-
-    return run_lint(options) if /lint|format|style/i.match?(task)
+    # Only match short command-like phrases; avoid hijacking descriptive tasks
+    # e.g. "run linting" ✓ but "add linting to CI" ✗
+    return run_test_diagnostic(options) if task.match?(/\A(run\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
+    return run_syntax_check(options) if task.match?(/\A(run\s+)?(syntax|compile)(\s+check)?\s*\z/i)
+    return run_lint(options) if task.match?(/\A(run\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
 
     plan = nil
     @spinner.update(title: 'Planning task with Ollama...')
@@ -151,12 +150,48 @@ class Router
     end
 
     # Escalate to executor for fix
-    escalate_to_executor(summary, options.merge(verify_command: command))
+    if type == :lint
+      escalate_lint_one_at_a_time(summary, options.merge(verify_command: command))
+    else
+      escalate_to_executor(summary, options.merge(verify_command: command))
+    end
+  end
+
+  def escalate_lint_one_at_a_time(summary, options)
+    max_iterations = 20
+    current_summary = summary
+
+    max_iterations.times do |iteration|
+      puts "\n--- Fix iteration #{iteration + 1}/#{max_iterations} ---" if iteration.positive?
+
+      success = escalate_to_executor(current_summary, options.merge(fix_first_only: true))
+      return true if success
+
+      @spinner.update(title: 'Re-running RuboCop...')
+      verify_result = nil
+      @spinner.run { verify_result = TerminalRunner.run(options[:verify_command]) }
+
+      return false if verify_result[:exit_status].zero?
+
+      @spinner.update(title: 'Summarizing remaining offenses...')
+      current_summary = nil
+      @spinner.run { current_summary = @tiny_processor.summarize_output(verify_result[:output], type: :lint) }
+
+      puts "\n--- Remaining offenses ---"
+      table = TTY::Table.new(header: %w[Attribute Value])
+      table << ['Failed Items', Array(current_summary['failed_items']).join("\n")]
+      table << ['Error Summary', current_summary['error_summary']]
+      puts table.render(:unicode, multiline: true)
+    end
+
+    puts "\nReached max iterations (#{max_iterations}). Some offenses may remain."
+    false
   end
 
   def escalate_to_executor(summary, options)
     type = options[:type] || :test
     verify_command = options[:verify_command] || 'bundle exec rspec'
+    fix_first_only = options[:fix_first_only]
 
     fix_plan = {
       'task_type' => type == :test ? 'refactor' : 'architecture',
@@ -177,6 +212,7 @@ class Router
 
       TASK:
       Please fix the #{type} failures identified above. Apply the minimal necessary change.
+      #{'Fix ONLY the first offense listed. Do not fix any others.' if fix_first_only}
       You MUST provide your response in JSON format matching the requested schema. Provide the FULL content of the file for the 'content' field.
 
       CRITICAL GUIDELINES:
