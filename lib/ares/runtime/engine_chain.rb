@@ -9,8 +9,17 @@ module Ares
   module Runtime
     # Chain of Responsibility Handler linking CLI engines for automated fallback.
     class EngineChain
+      CAPABLE_ENGINES = %w[claude codex cursor].freeze
+
       attr_accessor :next_handler
       attr_reader :engine_name
+
+      def self.build_fallback(initial_engine)
+        initial = initial_engine.to_s
+        fallback_order = ([initial] + (CAPABLE_ENGINES - [initial])).uniq
+        chain = build(fallback_order)
+        { chain: chain, size: fallback_order.size }
+      end
 
       def initialize(engine_name)
         @engine_name = engine_name
@@ -18,48 +27,12 @@ module Ares
         @adapter = get_adapter(engine_name)
       end
 
-      # Standard execution chain
       def call(prompt, options, attempt: 1, total: 1)
-        if attempt > 1
-          puts "Falling back to #{@engine_name} (attempt #{attempt}/#{total})..."
-        else
-          puts "Executing task via #{@engine_name} (attempt #{attempt}/#{total})..."
-        end
-
-        begin
-          QuotaManager.increment_usage(@engine_name)
-
-          @adapter.call(prompt, options[:model], **adapter_options(options))
-        rescue StandardError => e
-          puts "\n⚠️ #{@engine_name} failed: #{e.message.split("\n").first}"
-
-          raise 'All available AI engines failed to execute the task.' unless @next_handler
-
-          @next_handler.call(prompt, options, attempt: attempt + 1, total: total)
-        end
+        execute_with_fallback(prompt, options, attempt, total, mode: :task)
       end
 
-      # Specialized call for fix escalation
-      def call_fix(prompt, options, attempt: 1, total: 1, &checkpoint_block)
-        if attempt > 1
-          puts "Falling back to #{@engine_name} for fix (attempt #{attempt}/#{total})..."
-        else
-          puts "Applying fix via #{@engine_name} (attempt #{attempt}/#{total})..."
-        end
-
-        checkpoint_block&.call(@engine_name)
-
-        begin
-          QuotaManager.increment_usage(@engine_name)
-
-          @adapter.call(prompt, options[:model], **adapter_options(options))
-        rescue StandardError => e
-          puts "\n⚠️ #{@engine_name} failed during fix: #{e.message.split("\n").first}"
-
-          raise 'All available AI engines failed to apply the fix.' unless @next_handler
-
-          @next_handler.call_fix(prompt, options, attempt: attempt + 1, total: total, &checkpoint_block)
-        end
+      def call_fix(prompt, options, attempt: 1, total: 1, &block)
+        execute_with_fallback(prompt, options, attempt, total, mode: :fix, &block)
       end
 
       # Factory method to build the chain
@@ -79,6 +52,40 @@ module Ares
       end
 
       private
+
+      def execute_with_fallback(prompt, options, attempt, total, mode:, &block)
+        puts status_message(attempt, total, mode)
+        block&.call(@engine_name)
+
+        QuotaManager.increment_usage(@engine_name)
+        @adapter.call(prompt, options[:model], **adapter_options(options))
+      rescue StandardError => e
+        failed_msg = mode == :fix ? "#{@engine_name} failed during fix:" : "#{@engine_name} failed:"
+        puts "\n⚠️ #{failed_msg} #{e.message.split("\n").first}"
+        raise all_engines_failed_message(mode) unless @next_handler
+
+        next_method = mode == :fix ? :call_fix : :call
+        @next_handler.public_send(next_method, prompt, options, attempt: attempt + 1, total: total, &block)
+      end
+
+      def status_message(attempt, total, mode)
+        action = if attempt > 1
+          'Falling back to'
+        elsif mode == :fix
+          'Applying fix via'
+        else
+          'Executing task via'
+        end
+        "#{action} #{@engine_name} (attempt #{attempt}/#{total})..."
+      end
+
+      def all_engines_failed_message(mode)
+        if mode == :fix
+          'All available AI engines failed to apply the fix.'
+        else
+          'All available AI engines failed to execute the task.'
+        end
+      end
 
       def get_adapter(engine)
         case engine

@@ -6,7 +6,7 @@ module Ares
       CONFIDENCE_THRESHOLD = 0.7
 
       def self.select(plan)
-        @config = ConfigManager.load_models
+        config = ConfigManager.load_models
 
         task_type = plan['task_type'] || 'refactor'
         confidence = plan['confidence'] || 1.0
@@ -15,7 +15,7 @@ module Ares
         return { engine: :claude, model: 'opus' } if confidence < CONFIDENCE_THRESHOLD || plan['risk_level'] == 'high'
 
         # Use string key lookup as ConfigManager returns keys as strings sometimes
-        rule = @config[task_type.to_sym] || @config[:refactor]
+        rule = config[task_type.to_sym] || config[:refactor]
         engine = rule[:engine].to_sym
 
         # Safety: restrict Ollama from code-modifying tasks if configured incorrectly

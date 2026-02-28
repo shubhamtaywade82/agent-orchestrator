@@ -9,14 +9,13 @@ module Ares
   module Runtime
     # Subsystem Facade that initializes and bundles core dependencies for the Router.
     class CoreSubsystem
-      attr_reader :logger, :planner, :selector, :tiny_processor, :ollama_healthy
+      attr_reader :logger, :planner, :tiny_processor, :ollama_healthy
 
       def initialize
         @logger = TaskLogger.new
         @ollama_healthy = initialize_ollama
 
         @planner = OllamaPlanner.new(healthy: @ollama_healthy)
-        @selector = ModelSelector.new
         @tiny_processor = TinyTaskProcessor.new(healthy: @ollama_healthy)
       end
 

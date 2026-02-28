@@ -12,12 +12,16 @@ module Ares
 
       protected
 
-      def build_command(_prompt, _model, resume: true, cloud: false, **_options)
+      def build_command(prompt, _model, resume: true, cloud: false, **_options)
         # --trust --yolo ensures no interactive prompts in headless mode
-        cmd = ['agent', '-p', '-', '--trust', '--yolo']
+        cmd = ['agent', prompt, '--print', '--trust', '--yolo']
         cmd << '-c' if cloud
         cmd << '--continue' if resume && !cloud
         cmd
+      end
+
+      def pipes_prompt_to_stdin?
+        false
       end
 
       def should_retry?(status, output)
