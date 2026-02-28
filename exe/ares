@@ -1,37 +1,75 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require 'ares_runtime'
 require 'optparse'
 
-options = {}
-OptionParser.new do |opts|
-  opts.banner = 'Usage: ares [options] "task description"'
+module Ares
+  class CLI
+    def self.start
+      command = ARGV.shift
 
-  opts.on('-d', '--dry-run', 'Plan without execution') do |d|
-    options[:dry_run] = d
+      case command
+      when 'init'    then init
+      when 'config'  then config
+      when 'doctor'  then doctor
+      when 'version' then version
+      when 'logs'    then logs
+      else
+        run_task(command)
+      end
+    end
+
+    def self.init
+      Ares::Runtime::Initializer.run
+    end
+
+    def self.config
+      Ares::Runtime::ConfigCLI.run
+    end
+
+    def self.doctor
+      Ares::Runtime::Doctor.run
+    end
+
+    def self.version
+      puts "Ares v#{Ares::Runtime::VERSION}"
+    end
+
+    def self.logs
+      Ares::Runtime::LogsCLI.run
+    end
+
+    def self.run_task(first_arg)
+      options = {
+        dry_run: false,
+        git: false,
+        tui: false
+      }
+
+      OptionParser.new do |opts|
+        opts.banner = 'Usage: ares [options] "task description"'
+
+        opts.on('-d', '--dry-run') { options[:dry_run] = true }
+        opts.on('-g', '--git')     { options[:git] = true }
+        opts.on('--tui')           { options[:tui] = true }
+      end.parse!
+
+      if options[:tui]
+        Ares::Runtime::Tui.start
+        exit
+      end
+
+      task = ([first_arg] + ARGV).compact.join(' ').strip
+
+      if task.empty?
+        puts 'No task provided.'
+        exit 1
+      end
+
+      Ares::Runtime::Router.new.run(task, options)
+    end
   end
-
-  opts.on('-g', '--git', 'Enable git auto-branching/committing') do |g|
-    options[:git] = g
-  end
-
-  opts.on('--tui', 'Launch interactive TUI') do |t|
-    options[:tui] = t
-  end
-end.parse!
-
-if options[:tui]
-  Ares::Runtime::Tui.start
-  exit
 end
 
-task = ARGV.join(' ')
-
-if task.empty?
-  puts 'Usage: ares [options] "task description"'
-  exit 1
-end
-
-Router.new.run(task, options)
+Ares::CLI.start

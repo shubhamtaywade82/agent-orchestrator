@@ -23,7 +23,7 @@ graph TD
 
 - **Planning Layer**: Uses local Ollama model to classify tasks, assign risk/confidence scores, and decompose tasks into discrete slices.
 - **Tiny Task Layer (Diagnostics)**: Offloads raw terminal output parsing and diff summarization to local Ollama, reducing token load on Claude by 60-80%.
-- **Routing Layer**: Deterministic rules in `config/models.yml` allocate tasks to engines based on type and risk.
+- **Routing Layer**: Deterministic rules in `config/ares/models.yml` allocate tasks to engines based on type and risk.
 - **Automated Fix Loop**: Detects failures, summarizes them locally, escalates for a fix, and re-verifies automatically.
 - **Traceability**: Every task receives a UUID and is logged in `logs/UUID.json`.
 - **Safety**: Built-in quota tracking and confidence-based escalation to Claude Opus for high-risk work.
@@ -46,6 +46,12 @@ bin/ares --tui
 
 ## 🚀 Usage
 
+### Installation (from RubyGems)
+```bash
+gem install ares-runtime
+```
+
+### Development Setup
 Install dependencies:
 ```bash
 bundle install
@@ -53,6 +59,10 @@ bundle install
 
 Run a task:
 ```bash
+# Using the installed gem
+ares "Task description"
+
+# Or using the local executable
 exe/ares "Task description"
 ```
 

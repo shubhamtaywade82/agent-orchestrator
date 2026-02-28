@@ -1,4 +1,6 @@
 # Register your project roots here for context discovery
-workspaces:
-  - /home/nemesis/project/trading-workspace
-  - /home/nemesis/project/ai-workspace
+# Example:
+# workspaces:
+#   - /path/to/project-a
+#   - /path/to/project-b
+workspaces: []

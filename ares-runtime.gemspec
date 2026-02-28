@@ -9,15 +9,31 @@ Gem::Specification.new do |s|
   s.description = 'A production-grade control plane for routing tasks to Claude, Codex, and Cursor with local planning.'
   s.authors     = ['Antigravity']
   s.email       = ['shubhamtaywade82@gmail.com']
-  s.files       = Dir.glob('{exe,bin,lib,config}/**/*') + ['README.md', 'Gemfile', 'LICENSE.txt']
+  s.files       = Dir.glob('lib/**/*.rb') +
+                  Dir.glob('exe/*') +
+                  Dir.glob('config/*.yml') +
+                  ['README.md', 'LICENSE.txt', 'CHANGELOG.md']
   s.executables = ['ares']
   s.bindir      = 'exe'
   s.homepage    = 'https://github.com/shubhamtaywade82/agent-orchestrator'
   s.license     = 'MIT'
   s.require_paths = ['lib']
 
+  s.add_dependency 'dotenv'
   s.add_dependency 'json'
   s.add_dependency 'ollama-client', '~> 1.0'
+  s.add_dependency 'tty-box'
+  s.add_dependency 'tty-command'
+  s.add_dependency 'tty-cursor'
+  s.add_dependency 'tty-prompt'
+  s.add_dependency 'tty-screen'
+  s.add_dependency 'tty-spinner'
+  s.add_dependency 'tty-table'
   s.add_dependency 'yaml'
   s.metadata['rubygems_mfa_required'] = 'true'
+  s.metadata['homepage_uri'] = s.homepage
+  s.metadata['source_code_uri'] = s.homepage
+  s.metadata['changelog_uri'] = "#{s.homepage}/blob/main/CHANGELOG.md"
+
+  s.required_ruby_version = '>= 2.7.0'
 end
