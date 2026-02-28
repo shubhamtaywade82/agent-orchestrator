@@ -28,6 +28,22 @@ graph TD
 - **Traceability**: Every task receives a UUID and is logged in `logs/UUID.json`.
 - **Safety**: Built-in quota tracking and confidence-based escalation to Claude Opus for high-risk work.
 
+## 📟 Terminal User Interface (TUI)
+
+Ares 2.0 includes a professional, interactive dashboard for real-time task management.
+```bash
+bin/ares --tui
+```
+- **Live Monitoring**: Track quotas, task history, and AI reasoning live.
+- **In-App Config**: Change models and Ollama settings without leaving the CLI.
+- **Universal Fixes**: Trigger test, lint, or syntax healing with one keypress.
+
+## 📚 Documentation & Guides
+
+- [**TUI Guide**](file:///home/nemesis/project/agent-orchestrator/docs/TUI_GUIDE.md): Master the interactive dashboard.
+- [**Self-Healing Guide**](file:///home/nemesis/project/agent-orchestrator/docs/SELF_HEALING.md): How Ares automatically repairs your code.
+- [**Configuration Guide**](file:///home/nemesis/project/agent-orchestrator/docs/CONFIGURATION.md): Tuning model routing and local AI parameters.
+
 ## 🚀 Usage
 
 Install dependencies:

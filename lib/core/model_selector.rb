@@ -5,7 +5,11 @@ class ModelSelector
   CONFIG_PATH = File.expand_path("../../config/models.yml", __dir__)
 
   def self.select(plan)
+<<<<<<< Updated upstream
     @config ||= YAML.load_file(CONFIG_PATH)
+=======
+    @config = YAML.load_file(CONFIG_PATH)
+>>>>>>> Stashed changes
 
     task_type = plan["task_type"]
     confidence = plan["confidence"] || 1.0

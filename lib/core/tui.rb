@@ -106,6 +106,103 @@ module Ares
             @router.run(task)
             @prompt.keypress("Press any key to return to dashboard...")
           end
+<<<<<<< Updated upstream
+=======
+        when 'l', 'L'
+          begin
+            @router.run('lint', git: false)
+          rescue StandardError => e
+            puts "\n❌ Error during linting: #{e.message}"
+          ensure
+            @prompt.keypress('Press any key to return to dashboard...')
+          end
+        when 'c', 'C'
+          configure_settings
+        end
+      end
+
+      def configure_settings
+        loop do
+          system('clear')
+          puts '--- ⚙️ ARES CONFIGURATION MODE ---'
+
+          config_type = @prompt.select('What would you like to configure?',
+                                       ['Model Allocations (Task-based)', 'Ollama Server Settings',
+                                        'Exit to Dashboard'])
+          break if config_type == 'Exit to Dashboard'
+
+          if config_type == 'Model Allocations (Task-based)'
+            configure_models
+          else
+            configure_ollama_server
+          end
+        end
+      end
+
+      def configure_models
+        loop do
+          system('clear')
+          puts '--- 🤖 MODEL ALLOCATIONS ---'
+          task_types = ConfigManager.task_types
+          task_type = @prompt.select('Select task type:', task_types + ['Back'])
+          break if task_type == 'Back'
+
+          current_config = ConfigManager.load_models[task_type]
+          puts "\nCurrent: #{current_config[:engine]} (#{current_config[:model] || 'default'})"
+
+          engine = @prompt.select('Select engine:', %w[claude codex cursor ollama Back])
+          next if engine == 'Back'
+
+          model = case engine
+                  when 'claude'
+                    @prompt.select('Select model:', %w[opus sonnet haiku Back])
+                  when 'ollama'
+                    OllamaAdapter.new.send(:best_available_model) # Trigger discovery
+                    available = Ollama::Client.new.list_model_names
+                    @prompt.select('Select model (discovered):', available + ['Back'])
+                  else
+                    @prompt.ask('Enter model name (or leave empty, type "back" to cancel):')
+                  end
+
+          next if model == 'Back' || model.to_s.downcase == 'back'
+
+          model = nil if model.to_s.strip.empty?
+
+          ConfigManager.update_task_config(task_type, engine, model)
+          puts "\n✅ Updated #{task_type}!"
+          sleep 1
+        end
+      end
+
+      def configure_ollama_server
+        loop do
+          system('clear')
+          puts '--- 🔌 OLLAMA SERVER SETTINGS ---'
+          config = ConfigManager.load_ollama
+
+          puts "Base URL: #{config[:base_url]}"
+          puts "Timeout:  #{config[:timeout]}s"
+          puts "Ctx Size: #{config[:num_ctx]}"
+
+          field = @prompt.select('Select setting to change:',
+                                 ['Base URL', 'Timeout', 'Context Size', 'Retries', 'Back'])
+          break if field == 'Back'
+
+          case field
+          when 'Base URL'
+            config[:base_url] = @prompt.ask('Enter Ollama Base URL:', default: config[:base_url])
+          when 'Timeout'
+            config[:timeout] = @prompt.ask('Enter Timeout (seconds):', default: config[:timeout].to_s).to_i
+          when 'Context Size'
+            config[:num_ctx] = @prompt.ask('Enter Context Window Size:', default: config[:num_ctx].to_s).to_i
+          when 'Retries'
+            config[:retries] = @prompt.ask('Enter Retry Count:', default: config[:retries].to_s).to_i
+          end
+
+          ConfigManager.save_ollama(config)
+          puts "\n✅ Server settings updated!"
+          sleep 1
+>>>>>>> Stashed changes
         end
       end
     end

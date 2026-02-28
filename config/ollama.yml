@@ -1,0 +1,4 @@
+base_url: "http://localhost:11434"
+timeout: 300
+num_ctx: 4096
+retries: 3

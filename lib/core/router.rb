@@ -31,10 +31,19 @@ class Router
     @tiny_processor = TinyTaskProcessor.new
     @spinner = TTY::Spinner.new("[:spinner] :title", format: :dots)
 
+<<<<<<< Updated upstream
     # Special handling for diagnostic tasks
     if task =~ /run tests/i
       return run_test_diagnostic(options)
     end
+=======
+    # Special handling for diagnostic tasks (tests, fixes, diagnostics)
+    return run_test_diagnostic(options) if /(run )?(test|rspec|fix|diagnostic)/i.match?(task)
+
+    return run_syntax_check(options) if /syntax|compile/i.match?(task)
+
+    return run_lint(options) if /lint|format|style/i.match?(task)
+>>>>>>> Stashed changes
 
     plan = nil
     @spinner.update(title: "Planning task with Ollama...")
@@ -89,8 +98,13 @@ class Router
     adapter = build_adapter(selection[:engine])
 
     if options[:git]
+<<<<<<< Updated upstream
       puts "🌿 Creating git branch for task..."
       GitManager.create_branch(@logger.task_id)
+=======
+      puts '🌿 Creating git branch for task...'
+      GitManager.create_branch(@logger.task_id, task)
+>>>>>>> Stashed changes
     end
 
     QuotaManager.increment_usage(selection[:engine])
@@ -109,6 +123,7 @@ class Router
   private
 
   def run_test_diagnostic(options)
+<<<<<<< Updated upstream
     @spinner.update(title: "Running tests...")
     result = nil
     @spinner.run { result = TerminalRunner.run("bundle exec rspec") }
@@ -119,9 +134,34 @@ class Router
     end
 
     @spinner.update(title: "Tests failed. Summarizing with local Ollama...")
-    summary = nil
-    @spinner.run { summary = @tiny_processor.summarize_test_output(result[:output]) }
+=======
+    run_diagnostic_loop('bundle exec rspec', options.merge(type: :test, title: 'Running tests'))
+  end
 
+  def run_syntax_check(options)
+    # Check syntax for all ruby files in lib, bin, spec individually to catch all errors
+    cmd = "ruby -e 'Dir.glob(\"{lib,bin,exe,spec}/**/*.rb\").each { |f| (puts \"Checking \#{f}\"; system(\"ruby -c \#{f}\")) or exit(1) }'"
+    run_diagnostic_loop(cmd, options.merge(type: :syntax, title: 'Checking syntax'))
+  end
+
+  def run_diagnostic_loop(command, options)
+    title = options[:title] || 'Running verification'
+    @spinner.update(title: "#{title}...")
+    result = nil
+    @spinner.run { result = TerminalRunner.run(command) }
+
+    if result[:exit_status].zero?
+      puts "#{title} passed! ✅"
+      return true
+    end
+
+    type = options[:type] || :test
+    @spinner.update(title: "#{title} failed. Summarizing with local Ollama...")
+>>>>>>> Stashed changes
+    summary = nil
+    @spinner.run { summary = @tiny_processor.summarize_output(result[:output], type: type) }
+
+<<<<<<< Updated upstream
     puts "\n--- Diagnostic Summary ---"
     table = TTY::Table.new(header: ["Attribute", "Value"])
     table << ["Failed Tests", summary['failed_tests'].join("\n")]
@@ -131,18 +171,39 @@ class Router
     if options[:dry_run]
       puts "Dry run: skipping escalation."
       return
+=======
+    puts "\n--- Diagnostic Summary (#{type.to_s.upcase}) ---"
+    table = TTY::Table.new(header: %w[Attribute Value])
+    table << ['Failed Items', Array(summary['failed_items'] || summary['failed_tests']).join("\n")]
+    table << ['Error Summary', summary['error_summary']]
+    puts table.render(:unicode, multiline: true)
+
+    if options[:dry_run]
+      puts 'Dry run: skipping escalation.'
+      return false
+>>>>>>> Stashed changes
     end
 
     # Escalate to executor for fix
-    escalate_to_executor(summary, options)
+    escalate_to_executor(summary, options.merge(verify_command: command))
   end
 
   def escalate_to_executor(summary, options)
+<<<<<<< Updated upstream
     # Decompose the summary into a plan for the ModelSelector
     fix_plan = {
       "task_type" => "refactor",
       "risk_level" => "medium",
       "confidence" => 0.6 # Low confidence because it's a fix
+=======
+    type = options[:type] || :test
+    verify_command = options[:verify_command] || 'bundle exec rspec'
+
+    fix_plan = {
+      'task_type' => type == :test ? 'refactor' : 'architecture',
+      'risk_level' => 'medium',
+      'confidence' => 0.6
+>>>>>>> Stashed changes
     }
 
     selection = ModelSelector.select(fix_plan)
@@ -152,23 +213,79 @@ class Router
     fix_prompt = <<~PROMPT
       #{context}
 
-      DIAGNOSTIC SUMMARY:
-      Failed Tests: #{summary['failed_tests'].join(', ')}
+      DIAGNOSTIC SUMMARY (#{type.to_s.upcase}):
+      Failed Items: #{Array(summary['failed_items'] || summary['failed_tests']).join(', ')}
       Error: #{summary['error_summary']}
 
       TASK:
+<<<<<<< Updated upstream
       Please fix the failing tests identified above. Apply the minimal necessary change to satisfy the test requirements.
+=======
+      Please fix the #{type} failures identified above. Apply the minimal necessary change.
+      You MUST provide your response in JSON format matching the requested schema. Provide the FULL content of the file for the 'content' field.
+
+      CRITICAL GUIDELINES:
+      - Focus your fix ONLY on the files mentioned in the error summary.
+      - DO NOT modify core system files in 'lib/core/' or 'lib/adapters/' or 'lib/planner/' unless they are the direct cause of the #{type} failure.
+      - If you think the bug is in the engine, REFUSE to fix and instead explain why in the 'explanation' field.
+      - Ensure your fix is minimal.
+
+      FAILING FILE CONTENTS:
+      #{Array(summary['files']).filter_map do |f|
+        path = File.expand_path(f['path'], Dir.pwd)
+        next unless File.exist?(path)
+
+        "--- FILE: #{f['path']} ---\n#{File.read(path)}\n"
+      end.join("\n")}
+
+      PERTINENT PROJECT FILES (for reference):
+      #{Dir.glob('{spec,lib}/**/*').reject { |f| File.directory?(f) }.join("\n")}
+      #{Array(summary['files']).filter_map { |f| f['path'] }.uniq.join("\n")}
+>>>>>>> Stashed changes
     PROMPT
 
     adapter = build_adapter(selection[:engine])
 
     @spinner.update(title: "Applying fix via #{selection[:engine]}...")
     result = nil
+<<<<<<< Updated upstream
     @spinner.run { result = adapter.call(fix_prompt, selection[:model]) }
     puts result
+=======
+    @spinner.run do
+      adapter = build_adapter(selection[:engine])
+      if selection[:engine] == :ollama
+        result = adapter.call(fix_prompt, selection[:model], schema: schema)
+      else
+        raw = adapter.call(fix_prompt, selection[:model])
+        result = begin
+          JSON.parse(raw)
+        rescue StandardError
+          { 'explanation' => raw, 'patches' => [] }
+        end
+      end
+    rescue StandardError => e
+      puts "\n⚠️ Fix failed via #{selection[:engine]}: #{e.message}. Retrying with local Ollama..."
+      fallback_adapter = OllamaAdapter.new
+      result = fallback_adapter.call(fix_prompt, schema: schema)
+    end
+
+    if result['patches']&.any?
+      result['patches'].each do |patch|
+        path = File.expand_path(patch['file'], Dir.pwd)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, patch['content'])
+        puts "Applied fix to #{patch['file']} ✅"
+      end
+    else
+      puts "\nNo automated patches generated. Suggestion:"
+      puts result['explanation']
+    end
+>>>>>>> Stashed changes
 
     @spinner.update(title: "Verifying fix...")
     verify_result = nil
+<<<<<<< Updated upstream
     @spinner.run { verify_result = TerminalRunner.run("bundle exec rspec") }
 
     if verify_result[:exit_status] == 0
@@ -176,6 +293,21 @@ class Router
     else
       puts "Fix failed. Tests are still failing. ❌"
     end
+=======
+    @spinner.run { verify_result = TerminalRunner.run(verify_command) }
+
+    if verify_result[:exit_status].zero?
+      puts "Fix successful! #{type.to_s.capitalize} issues resolved. ✅"
+      true
+    else
+      puts "Fix failed. #{type.to_s.capitalize} issues still persist. ❌"
+      false
+    end
+  end
+
+  def run_lint(options)
+    run_diagnostic_loop('bundle exec rubocop -A', options.merge(type: :lint, title: 'Running RuboCop'))
+>>>>>>> Stashed changes
   end
 
   def build_adapter(engine)
