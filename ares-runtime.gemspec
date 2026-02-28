@@ -12,6 +12,7 @@ Gem::Specification.new do |s|
   s.bindir      = "exe"
   s.homepage    = "https://github.com/shubhamtaywade82/agent-orchestrator"
   s.license     = "MIT"
+  s.require_paths = ["lib"]
 
   s.add_dependency "ollama-client", "~> 1.0"
   s.add_dependency "json"

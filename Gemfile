@@ -1,5 +1,7 @@
 source "https://rubygems.org"
 
+gemspec
+
 gem "ollama-client"
 gem "json"
 gem "yaml"
@@ -11,3 +13,4 @@ gem "tty-table"
 gem "tty-screen"
 gem "tty-box"
 gem "tty-cursor"
+gem "dotenv"
