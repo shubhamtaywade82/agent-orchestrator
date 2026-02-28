@@ -1,0 +1,4 @@
+# Register your project roots here for context discovery
+workspaces:
+  - /home/nemesis/project/trading-workspace
+  - /home/nemesis/project/ai-workspace

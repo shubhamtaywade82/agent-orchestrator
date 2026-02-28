@@ -1,0 +1,24 @@
+architecture:
+  engine: claude
+  model: opus
+
+refactor:
+  engine: claude
+  model: sonnet
+
+bulk_patch:
+  engine: codex
+  model: default
+
+test_generation:
+  engine: codex
+
+summarization:
+  engine: claude
+  model: haiku
+
+interactive_edit:
+  engine: cursor
+
+pr_automation:
+  engine: codex

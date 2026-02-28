@@ -1,0 +1,15 @@
+logs/*.json
+*.gem
+.bundle/
+vendor/bundle/
+Gemfile.lock
+
+# AI Sessions & Caches
+.claude/
+.cursor/
+.codex/
+.aider/
+.sessions/
+.cache/
+tmp/
+.env
