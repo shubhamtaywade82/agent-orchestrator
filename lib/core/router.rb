@@ -9,6 +9,7 @@ require_relative "terminal_runner"
 require_relative "../adapters/claude_adapter"
 require_relative "../adapters/codex_adapter"
 require_relative "../adapters/cursor_adapter"
+require_relative "../adapters/ollama_adapter"
 require "tty-spinner"
 require "tty-table"
 require "tty-prompt"
@@ -31,19 +32,12 @@ class Router
     @tiny_processor = TinyTaskProcessor.new
     @spinner = TTY::Spinner.new("[:spinner] :title", format: :dots)
 
-<<<<<<< Updated upstream
-    # Special handling for diagnostic tasks
-    if task =~ /run tests/i
-      return run_test_diagnostic(options)
-    end
-=======
     # Special handling for diagnostic tasks (tests, fixes, diagnostics)
     return run_test_diagnostic(options) if /(run )?(test|rspec|fix|diagnostic)/i.match?(task)
 
     return run_syntax_check(options) if /syntax|compile/i.match?(task)
 
     return run_lint(options) if /lint|format|style/i.match?(task)
->>>>>>> Stashed changes
 
     plan = nil
     @spinner.update(title: "Planning task with Ollama...")
@@ -118,18 +112,6 @@ class Router
   private
 
   def run_test_diagnostic(options)
-<<<<<<< Updated upstream
-    @spinner.update(title: "Running tests...")
-    result = nil
-    @spinner.run { result = TerminalRunner.run("bundle exec rspec") }
-
-    if result[:exit_status] == 0
-      puts "All tests passed! ✅"
-      return
-    end
-
-    @spinner.update(title: "Tests failed. Summarizing with local Ollama...")
-=======
     run_diagnostic_loop('bundle exec rspec', options.merge(type: :test, title: 'Running tests'))
   end
 
@@ -152,21 +134,9 @@ class Router
 
     type = options[:type] || :test
     @spinner.update(title: "#{title} failed. Summarizing with local Ollama...")
->>>>>>> Stashed changes
     summary = nil
     @spinner.run { summary = @tiny_processor.summarize_output(result[:output], type: type) }
 
-<<<<<<< Updated upstream
-    puts "\n--- Diagnostic Summary ---"
-    table = TTY::Table.new(header: ["Attribute", "Value"])
-    table << ["Failed Tests", summary['failed_tests'].join("\n")]
-    table << ["Error Summary", summary['error_summary']]
-    puts table.render(:unicode, multiline: true)
-
-    if options[:dry_run]
-      puts "Dry run: skipping escalation."
-      return
-=======
     puts "\n--- Diagnostic Summary (#{type.to_s.upcase}) ---"
     table = TTY::Table.new(header: %w[Attribute Value])
     table << ['Failed Items', Array(summary['failed_items'] || summary['failed_tests']).join("\n")]
@@ -176,7 +146,6 @@ class Router
     if options[:dry_run]
       puts 'Dry run: skipping escalation.'
       return false
->>>>>>> Stashed changes
     end
 
     # Escalate to executor for fix
@@ -184,13 +153,6 @@ class Router
   end
 
   def escalate_to_executor(summary, options)
-<<<<<<< Updated upstream
-    # Decompose the summary into a plan for the ModelSelector
-    fix_plan = {
-      "task_type" => "refactor",
-      "risk_level" => "medium",
-      "confidence" => 0.6 # Low confidence because it's a fix
-=======
     type = options[:type] || :test
     verify_command = options[:verify_command] || 'bundle exec rspec'
 
@@ -198,7 +160,6 @@ class Router
       'task_type' => type == :test ? 'refactor' : 'architecture',
       'risk_level' => 'medium',
       'confidence' => 0.6
->>>>>>> Stashed changes
     }
 
     selection = ModelSelector.select(fix_plan)
@@ -213,9 +174,6 @@ class Router
       Error: #{summary['error_summary']}
 
       TASK:
-<<<<<<< Updated upstream
-      Please fix the failing tests identified above. Apply the minimal necessary change to satisfy the test requirements.
-=======
       Please fix the #{type} failures identified above. Apply the minimal necessary change.
       You MUST provide your response in JSON format matching the requested schema. Provide the FULL content of the file for the 'content' field.
 
@@ -236,17 +194,31 @@ class Router
       PERTINENT PROJECT FILES (for reference):
       #{Dir.glob('{spec,lib}/**/*').reject { |f| File.directory?(f) }.join("\n")}
       #{Array(summary['files']).filter_map { |f| f['path'] }.uniq.join("\n")}
->>>>>>> Stashed changes
     PROMPT
+
+    schema = {
+      'type' => 'object',
+      'required' => %w[explanation patches],
+      'properties' => {
+        'explanation' => { 'type' => 'string' },
+        'patches' => {
+          'type' => 'array',
+          'items' => {
+            'type' => 'object',
+            'required' => %w[file content],
+            'properties' => {
+              'file' => { 'type' => 'string' },
+              'content' => { 'type' => 'string' }
+            }
+          }
+        }
+      }
+    }
 
     adapter = build_adapter(selection[:engine])
 
     @spinner.update(title: "Applying fix via #{selection[:engine]}...")
     result = nil
-<<<<<<< Updated upstream
-    @spinner.run { result = adapter.call(fix_prompt, selection[:model]) }
-    puts result
-=======
     @spinner.run do
       adapter = build_adapter(selection[:engine])
       if selection[:engine] == :ollama
@@ -276,19 +248,9 @@ class Router
       puts "\nNo automated patches generated. Suggestion:"
       puts result['explanation']
     end
->>>>>>> Stashed changes
 
     @spinner.update(title: "Verifying fix...")
     verify_result = nil
-<<<<<<< Updated upstream
-    @spinner.run { verify_result = TerminalRunner.run("bundle exec rspec") }
-
-    if verify_result[:exit_status] == 0
-      puts "Fix successful! All tests passed. ✅"
-    else
-      puts "Fix failed. Tests are still failing. ❌"
-    end
-=======
     @spinner.run { verify_result = TerminalRunner.run(verify_command) }
 
     if verify_result[:exit_status].zero?
@@ -302,7 +264,6 @@ class Router
 
   def run_lint(options)
     run_diagnostic_loop('bundle exec rubocop -A', options.merge(type: :lint, title: 'Running RuboCop'))
->>>>>>> Stashed changes
   end
 
   def build_adapter(engine)
@@ -310,7 +271,9 @@ class Router
     when :claude then ClaudeAdapter.new
     when :codex then CodexAdapter.new
     when :cursor then CursorAdapter.new
-    else raise "Unknown engine"
+    when :ollama then OllamaAdapter.new
+    else
+      raise "Unsupported engine: #{engine}. Check your config/models.yml"
     end
   end
 end

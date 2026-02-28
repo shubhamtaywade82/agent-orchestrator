@@ -106,8 +106,6 @@ module Ares
             @router.run(task)
             @prompt.keypress("Press any key to return to dashboard...")
           end
-<<<<<<< Updated upstream
-=======
         when 'l', 'L'
           begin
             @router.run('lint', git: false)
@@ -202,7 +200,6 @@ module Ares
           ConfigManager.save_ollama(config)
           puts "\n✅ Server settings updated!"
           sleep 1
->>>>>>> Stashed changes
         end
       end
     end

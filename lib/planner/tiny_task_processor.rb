@@ -8,17 +8,6 @@ class TinyTaskProcessor
 
   def summarize_output(output, type: :test)
     schema = {
-<<<<<<< Updated upstream
-      "type" => "object",
-      "required" => ["failed_tests", "error_summary"],
-      "additionalProperties" => false,
-      "properties" => {
-        "failed_tests" => {
-          "type" => "array",
-          "items" => { "type" => "string" }
-        },
-        "error_summary" => { "type" => "string" }
-=======
       'type' => 'object',
       'required' => %w[failed_items error_summary files],
       'additionalProperties' => false,
@@ -39,7 +28,6 @@ class TinyTaskProcessor
             }
           }
         }
->>>>>>> Stashed changes
       }
     }
 
