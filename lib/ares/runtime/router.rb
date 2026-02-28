@@ -146,9 +146,9 @@ module Ares
       end
 
       def match_shortcut_task(task, options)
-        return run_test_diagnostic(options) if task.match?(/\A(run\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
-        return run_syntax_check(options) if task.match?(/\A(run\s+)?(syntax|compile)(\s+check)?\s*\z/i)
-        return run_lint(options) if task.match?(/\A(run\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
+        return run_test_diagnostic(options) if task.match?(/\A(run\s+|check\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
+        return run_syntax_check(options) if task.match?(/\A(run\s+|check\s+)?(syntax|compile)(\s+check)?\s*\z/i)
+        return run_lint(options) if task.match?(/\A(run\s+|check\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
 
         nil
       end
@@ -193,13 +193,30 @@ module Ares
         @logger.log_task(task, plan, selection)
         GitManager.create_branch(@logger.task_id, task) if options[:git]
 
-        QuotaManager.increment_usage(selection[:engine])
-        adapter = build_adapter(selection[:engine])
-        result = adapter.call("#{ContextLoader.load}\n\nTASK:\n#{task}", selection[:model])
+        capable_engines = %i[claude codex cursor]
+        initial_engine = selection[:engine]&.to_sym || :claude
+        fallback_chain = ([initial_engine] + (capable_engines - [initial_engine])).uniq
 
-        @logger.log_result(result)
-        GitManager.commit_changes(@logger.task_id, task) if options[:git]
-        puts result
+        attempts = 0
+        fallback_chain.each do |current_engine|
+          attempts += 1
+          @spinner.update(title: "Executing task via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})...")
+
+          begin
+            QuotaManager.increment_usage(current_engine)
+            result = call_adapter_with_persistence(current_engine, "#{ContextLoader.load}\n\nTASK:\n#{task}", selection)
+
+            @logger.log_result(result)
+            GitManager.commit_changes(@logger.task_id, task) if options[:git]
+            puts result
+            return
+          rescue StandardError => e
+            puts "\n⚠️ #{current_engine} failed during initial execution: #{e.message.split("\n").first.strip}"
+            next unless attempts >= fallback_chain.size
+
+            raise "Task execution failed after #{attempts} attempts. Last error: #{e.message}"
+          end
+        end
       end
 
       def generate_fix_prompt(summary, options)

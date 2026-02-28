@@ -12,7 +12,7 @@ module Ares
         config_data = ConfigManager.load_ollama
         config = Ollama::Config.new
         config.base_url = config_data[:base_url]
-        config.timeout = config_data[:timeout] || 300
+        config.timeout = config_data[:timeout] || 10 # 10s default for diagnostics
         config.num_ctx = config_data[:num_ctx]
         config.retries = config_data[:retries]
 
@@ -64,6 +64,13 @@ module Ares
           prompt: prompt,
           schema: schema
         )
+      rescue StandardError => e
+        # Safe Mode Fallback: Return a minimal summary to prevent blocking the diagnostic loop
+        {
+          'failed_items' => [],
+          'error_summary' => "Safe Mode: Failed to summarize with Ollama (#{e.message.split("\n").first}).",
+          'files' => []
+        }
       end
 
       private

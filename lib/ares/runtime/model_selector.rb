@@ -8,7 +8,7 @@ module Ares
       def self.select(plan)
         @config = ConfigManager.load_models
 
-        task_type = plan['task_type']
+        task_type = plan['task_type'] || 'refactor'
         confidence = plan['confidence'] || 1.0
 
         # Escalate if confidence is low or risk is explicitly high
