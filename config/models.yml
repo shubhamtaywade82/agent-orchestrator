@@ -15,8 +15,8 @@ test_generation:
   model: default
 
 summarization:
-  engine: claude
-  model: haiku
+  engine: ollama
+  model: default
 
 interactive_edit:
   engine: cursor

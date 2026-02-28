@@ -16,10 +16,21 @@ Gem::Specification.new do |s|
   s.license     = 'MIT'
   s.require_paths = ['lib']
 
+  s.add_dependency 'dotenv'
   s.add_dependency 'json'
   s.add_dependency 'ollama-client', '~> 1.0'
+  s.add_dependency 'tty-box'
+  s.add_dependency 'tty-command'
+  s.add_dependency 'tty-cursor'
+  s.add_dependency 'tty-prompt'
+  s.add_dependency 'tty-screen'
+  s.add_dependency 'tty-spinner'
+  s.add_dependency 'tty-table'
   s.add_dependency 'yaml'
   s.metadata['rubygems_mfa_required'] = 'true'
+  s.metadata['homepage_uri'] = s.homepage
+  s.metadata['source_code_uri'] = s.homepage
+  s.metadata['changelog_uri'] = "#{s.homepage}/blob/main/CHANGELOG.md"
 
   s.required_ruby_version = '>= 2.7.0'
 end

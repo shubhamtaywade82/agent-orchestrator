@@ -1,10 +1,31 @@
 # frozen_string_literal: true
 
+require 'tty-spinner'
+require 'tty-prompt'
+require 'tty-table'
+require 'tty-box'
+require 'tty-screen'
+require 'tty-cursor'
+require 'tty-command'
+require 'dotenv'
+require 'json'
+require 'yaml'
+require 'fileutils'
+require 'securerandom'
+
+# Load Dotenv
+begin
+  Dotenv.load
+rescue StandardError
+  nil
+end
+
 require_relative 'ares/runtime/version'
 
 # Core
 require_relative 'ares/runtime/config_manager'
 require_relative 'ares/runtime/context_loader'
+require_relative 'ares/runtime/diagnostic_parser'
 require_relative 'ares/runtime/git_manager'
 require_relative 'ares/runtime/model_selector'
 require_relative 'ares/runtime/quota_manager'
@@ -32,7 +53,8 @@ require_relative 'ares/runtime/doctor'
 require_relative 'ares/runtime/initializer'
 require_relative 'ares/runtime/logs_cli'
 
-# Alias for convenience if needed
+# The Ares Orchestrator Runtime
 module Ares
-  # The Ares Orchestrator Runtime
+  # Root namespace for the Ares Orchestrator CLI.
+  # All core logic is contained within Ares::Runtime.
 end

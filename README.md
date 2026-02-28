@@ -46,6 +46,12 @@ bin/ares --tui
 
 ## 🚀 Usage
 
+### Installation (from RubyGems)
+```bash
+gem install ares-runtime
+```
+
+### Development Setup
 Install dependencies:
 ```bash
 bundle install
@@ -53,6 +59,10 @@ bundle install
 
 Run a task:
 ```bash
+# Using the installed gem
+ares "Task description"
+
+# Or using the local executable
 exe/ares "Task description"
 ```
 

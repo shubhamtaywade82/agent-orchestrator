@@ -1,17 +1,21 @@
 # frozen_string_literal: true
 
-require 'English'
-class CodexAdapter
-  def call(prompt, _model = nil)
-    output = `codex exec "#{escape(prompt)}"`
-    raise "Codex command failed: #{output}" unless $CHILD_STATUS.success?
+module Ares
+  module Runtime
+    class CodexAdapter
+      def call(prompt, _model = nil)
+        cmd = %w[codex exec]
+        output = IO.popen(cmd, 'r+') do |io|
+          io.write(prompt)
+          io.close_write
+          io.read
+        end
+        raise "Codex command failed: #{output}" unless $CHILD_STATUS.success?
 
-    output
-  end
+        output
+      end
 
-  private
-
-  def escape(text)
-    text.gsub('"', '\"')
+      # Removed escape method as we now use stdin
+    end
   end
 end

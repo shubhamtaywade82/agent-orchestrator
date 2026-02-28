@@ -3,19 +3,31 @@
 module Ares
   module Runtime
     class LogsCLI
-      LOG_DIR = File.expand_path('~/.ares/logs')
-
       def self.run
-        unless Dir.exist?(LOG_DIR)
-          puts 'No logs found.'
+        project_log_dir = File.join(ConfigManager.project_root, 'logs')
+        global_log_dir = File.expand_path('~/.ares/logs')
+
+        log_dir = Dir.exist?(project_log_dir) ? project_log_dir : global_log_dir
+
+        unless Dir.exist?(log_dir)
+          puts "No logs found in #{log_dir}."
           return
         end
 
-        logs = Dir.glob("#{LOG_DIR}/*.log").sort.last(10).reverse
+        logs = Dir.glob("#{log_dir}/*.json").sort_by { |f| File.mtime(f) }.last(10).reverse
+
+        if logs.empty?
+          puts "No JSON logs found in #{log_dir}."
+          return
+        end
 
         logs.each do |file|
-          puts "\n--- #{File.basename(file)} ---"
-          puts File.read(file)
+          puts "\n--- Task: #{File.basename(file, '.json')} ---"
+          data = JSON.parse(File.read(file))
+          puts "Timestamp: #{data['timestamp']}"
+          puts "Task:      #{data['task']}"
+          puts "Engine:    #{data.dig('selection', 'engine')}"
+          puts "Result:    #{data['result']&.slice(0, 100)}..."
         end
       end
     end

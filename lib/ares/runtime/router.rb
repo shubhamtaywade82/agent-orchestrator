@@ -1,317 +1,311 @@
 # frozen_string_literal: true
 
-require_relative 'planner/ollama_planner'
-require_relative 'planner/tiny_task_processor'
-require_relative 'context_loader'
-require_relative 'model_selector'
-require_relative 'task_logger'
-require_relative 'quota_manager'
-require_relative 'git_manager'
-require_relative 'terminal_runner'
-require_relative 'config_manager'
-require_relative '../../adapters/claude_adapter'
-require_relative '../../adapters/codex_adapter'
-require_relative '../../adapters/cursor_adapter'
-require_relative '../../adapters/ollama_adapter'
-require 'tty-spinner'
-require 'tty-table'
-require 'tty-prompt'
-
-class Router
-  def initialize
-    @planner = Ares::Runtime::OllamaPlanner.new
-    @logger = TaskLogger.new
-  end
-
-  def run(task, options = {})
-    puts "Task ID: #{@logger.task_id}"
-
-    if QuotaManager.quota_exceeded?
-      puts '❌ Quota exceeded for Claude. Please try again later or use a different engine.'
-      exit 1
-    end
-
-    # Initialize tiny task processor and spinner
-    @tiny_processor = TinyTaskProcessor.new
-    @spinner = TTY::Spinner.new('[:spinner] :title', format: :dots)
-
-    # Only match short command-like phrases; avoid hijacking descriptive tasks
-    # e.g. "run linting" ✓ but "add linting to CI" ✗
-    return run_test_diagnostic(options) if task.match?(/\A(run\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
-    return run_syntax_check(options) if task.match?(/\A(run\s+)?(syntax|compile)(\s+check)?\s*\z/i)
-    return run_lint(options) if task.match?(/\A(run\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
-
-    plan = nil
-    @spinner.update(title: 'Planning task with Ollama...')
-    @spinner.run do
-      plan = @planner.plan(task)
-    end
-
-    selection = nil
-    @spinner.update(title: 'Selecting optimal model...')
-    @spinner.run do
-      selection = ModelSelector.select(plan)
-    end
-
-    puts "Task Type: #{plan['task_type']} | Risk: #{plan['risk_level']} | Confidence: #{plan['confidence']}"
-
-    if plan['confidence'].to_f < 0.7
-      prompt = TTY::Prompt.new
-      choice = prompt.select('Low confidence detected. How should we proceed?',
-                             "Execute with suggested #{selection[:engine]} (#{selection[:model] || 'default'})",
-                             'Override and use Claude Opus',
-                             'Abort task')
-
-      case choice
-      when /Override/
-        selection = { engine: :claude, model: 'opus' }
-        puts 'Overridden: Using Claude Opus.'
-      when /Abort/
-        puts 'Task aborted by user.'
-        return
+module Ares
+  module Runtime
+    class Router
+      def initialize
+        @planner = OllamaPlanner.new
+        @logger = TaskLogger.new
       end
-    end
 
-    puts "Engine Selected: #{selection[:engine]} (#{selection[:model] || 'default'})"
+      def run(task, options = {})
+        puts "Task ID: #{@logger.task_id}"
 
-    if plan['slices']&.any?
-      puts 'Slices:'
-      plan['slices'].each { |s| puts " - #{s}" }
-    end
+        if QuotaManager.quota_exceeded?
+          puts '❌ Quota exceeded for Claude. Please try again later or use a different engine.'
+          exit 1
+        end
 
-    if options[:dry_run]
-      puts '--- DRY RUN MODE ---'
-      @logger.log_task(task, plan, selection)
-      return
-    end
+        # Initialize tiny task processor and spinner
+        @tiny_processor = Ares::Runtime::TinyTaskProcessor.new
+        @spinner = TTY::Spinner.new('[:spinner] :title', format: :dots)
 
-    @logger.log_task(task, plan, selection)
+        # Only match short command-like phrases; avoid hijacking descriptive tasks
+        # e.g. "run linting" ✓ but "add linting to CI" ✗
+        return run_test_diagnostic(options) if task.match?(/\A(run\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
+        return run_syntax_check(options) if task.match?(/\A(run\s+)?(syntax|compile)(\s+check)?\s*\z/i)
+        return run_lint(options) if task.match?(/\A(run\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
 
-    context = ContextLoader.load
-    final_prompt = "#{context}\n\nTASK:\n#{task}"
+        plan = nil
+        @spinner.update(title: 'Planning task...')
+        @spinner.run do
+          plan = @planner.plan(task)
+        end
 
-    adapter = build_adapter(selection[:engine])
+        selection = nil
+        @spinner.update(title: 'Selecting optimal model...')
+        @spinner.run do
+          selection = ModelSelector.select(plan)
+        end
 
-    if options[:git]
-      puts '🌿 Creating git branch for task...'
-      GitManager.create_branch(@logger.task_id, task)
-    end
+        puts "Task Type: #{plan['task_type']} | Risk: #{plan['risk_level']} | Confidence: #{plan['confidence']}"
 
-    QuotaManager.increment_usage(selection[:engine])
-    result = adapter.call(final_prompt, selection[:model])
+        if plan['confidence'].to_f < 0.7
+          prompt = TTY::Prompt.new
+          choice = prompt.select('Low confidence detected. How should we proceed?',
+                                 "Execute with suggested #{selection[:engine]} (#{selection[:model] || 'default'})",
+                                 'Override and use Claude Opus',
+                                 'Abort task')
 
-    @logger.log_result(result)
+          case choice
+          when /Override/
+            selection = { engine: :claude, model: 'opus' }
+            puts 'Overridden: Using Claude Opus.'
+          when /Abort/
+            puts 'Task aborted by user.'
+            return
+          end
+        end
 
-    if options[:git]
-      puts '💾 Committing changes to git...'
-      GitManager.commit_changes(@logger.task_id, task)
-    end
+        puts "Engine Selected: #{selection[:engine]} (#{selection[:model] || 'default'})"
 
-    puts result
-  end
+        if plan['slices']&.any?
+          puts 'Slices:'
+          plan['slices'].each { |s| puts " - #{s}" }
+        end
 
-  private
+        if options[:dry_run]
+          puts '--- DRY RUN MODE ---'
+          @logger.log_task(task, plan, selection)
+          return
+        end
 
-  def run_test_diagnostic(options)
-    run_diagnostic_loop('bundle exec rspec', options.merge(type: :test, title: 'Running tests'))
-  end
+        @logger.log_task(task, plan, selection)
 
-  def run_syntax_check(options)
-    # Check syntax for all ruby files in lib, bin, spec individually to catch all errors
-    cmd = "ruby -e 'Dir.glob(\"{lib,bin,exe,spec}/**/*.rb\").each { |f| (puts \"Checking \#{f}\"; system(\"ruby -c \#{f}\")) or exit(1) }'"
-    run_diagnostic_loop(cmd, options.merge(type: :syntax, title: 'Checking syntax'))
-  end
+        context = ContextLoader.load
+        final_prompt = "#{context}\n\nTASK:\n#{task}"
 
-  def run_diagnostic_loop(command, options)
-    title = options[:title] || 'Running verification'
-    @spinner.update(title: "#{title}...")
-    result = nil
-    @spinner.run { result = TerminalRunner.run(command) }
+        adapter = build_adapter(selection[:engine])
 
-    if result[:exit_status].zero?
-      puts "#{title} passed! ✅"
-      return true
-    end
+        if options[:git]
+          puts '🌿 Creating git branch for task...'
+          GitManager.create_branch(@logger.task_id, task)
+        end
 
-    type = options[:type] || :test
-    @spinner.update(title: "#{title} failed. Summarizing with local Ollama...")
-    summary = nil
-    @spinner.run { summary = @tiny_processor.summarize_output(result[:output], type: type) }
+        QuotaManager.increment_usage(selection[:engine])
+        result = adapter.call(final_prompt, selection[:model])
 
-    puts "\n--- Diagnostic Summary (#{type.to_s.upcase}) ---"
-    table = TTY::Table.new(header: %w[Attribute Value])
-    table << ['Failed Items', Array(summary['failed_items'] || summary['failed_tests']).join("\n")]
-    table << ['Error Summary', summary['error_summary']]
-    puts table.render(:unicode, multiline: true)
+        @logger.log_result(result)
 
-    if options[:dry_run]
-      puts 'Dry run: skipping escalation.'
-      return false
-    end
+        if options[:git]
+          puts '💾 Committing changes to git...'
+          GitManager.commit_changes(@logger.task_id, task)
+        end
 
-    # Escalate to executor for fix
-    if type == :lint
-      escalate_lint_one_at_a_time(summary, options.merge(verify_command: command))
-    else
-      escalate_to_executor(summary, options.merge(verify_command: command))
-    end
-  end
+        puts result
+      end
 
-  def escalate_lint_one_at_a_time(summary, options)
-    max_iterations = 20
-    current_summary = summary
+      private
 
-    max_iterations.times do |iteration|
-      puts "\n--- Fix iteration #{iteration + 1}/#{max_iterations} ---" if iteration.positive?
+      def run_test_diagnostic(options)
+        run_diagnostic_loop('bundle exec rspec', options.merge(type: :test, title: 'Running tests'))
+      end
 
-      success = escalate_to_executor(current_summary, options.merge(fix_first_only: true))
-      return true if success
+      def run_syntax_check(options)
+        # Check syntax for all ruby files in lib, bin, spec individually to catch all errors
+        cmd = "ruby -e 'Dir.glob(\"{lib,bin,exe,spec}/**/*.rb\").each { |f| (puts \"Checking \#{f}\"; system(\"ruby -c \#{f}\")) or exit(1) }'"
+        run_diagnostic_loop(cmd, options.merge(type: :syntax, title: 'Checking syntax'))
+      end
 
-      @spinner.update(title: 'Re-running RuboCop...')
-      verify_result = nil
-      @spinner.run { verify_result = TerminalRunner.run(options[:verify_command]) }
+      def run_diagnostic_loop(command, options)
+        title = options[:title] || 'Running verification'
+        @spinner.update(title: "#{title}...")
+        result = nil
+        @spinner.run { result = TerminalRunner.run(command) }
 
-      return false if verify_result[:exit_status].zero?
+        if result[:exit_status].zero?
+          puts "#{title} passed! ✅"
+          return true
+        end
 
-      @spinner.update(title: 'Summarizing remaining offenses...')
-      current_summary = nil
-      @spinner.run { current_summary = @tiny_processor.summarize_output(verify_result[:output], type: :lint) }
+        type = options[:type] || :test
+        @spinner.update(title: "#{title} failed. Summarizing diagnostic output...")
+        summary = nil
 
-      puts "\n--- Remaining offenses ---"
-      table = TTY::Table.new(header: %w[Attribute Value])
-      table << ['Failed Items', Array(current_summary['failed_items']).join("\n")]
-      table << ['Error Summary', current_summary['error_summary']]
-      puts table.render(:unicode, multiline: true)
-    end
+        @spinner.run do
+          # Try fast-path regex/JSON parsing first
+          summary = DiagnosticParser.parse(result[:output], type: type)
 
-    puts "\nReached max iterations (#{max_iterations}). Some offenses may remain."
-    false
-  end
+          # Fallback to LLM only if fast-path failed to identify files
+          if summary['files'].empty? || summary['failed_items'].empty?
+            @spinner.update(title: "#{title} failed. LLM Fallback (Slow)...")
+            summary = @tiny_processor.summarize_output(result[:output], type: type)
+          end
+        rescue StandardError => e
+          @spinner.update(title: "#{title} failed. Error in fast-path: #{e.message}. LLM Fallback...")
+          summary = @tiny_processor.summarize_output(result[:output], type: type)
+        end
 
-  def escalate_to_executor(summary, options)
-    type = options[:type] || :test
-    verify_command = options[:verify_command] || 'bundle exec rspec'
-    fix_first_only = options[:fix_first_only]
+        puts "\n--- Diagnostic Summary (#{type.to_s.upcase}) ---"
+        table = TTY::Table.new(header: %w[Attribute Value])
+        table << ['Failed Items', Array(summary['failed_items'] || summary['failed_tests']).join("\n")]
+        table << ['Error Summary', summary['error_summary']]
+        puts table.render(:unicode, multiline: true)
 
-    fix_plan = {
-      'task_type' => type == :test ? 'refactor' : 'architecture',
-      'risk_level' => 'medium',
-      'confidence' => 0.6
-    }
+        if options[:dry_run]
+          puts 'Dry run: skipping escalation.'
+          return false
+        end
 
-    selection = ModelSelector.select(fix_plan)
-    puts "Selected Engine for fix: #{selection[:engine]} (#{selection[:model] || 'default'})"
-
-    context = ContextLoader.load
-    fix_prompt = <<~PROMPT
-      #{context}
-
-      DIAGNOSTIC SUMMARY (#{type.to_s.upcase}):
-      Failed Items: #{Array(summary['failed_items'] || summary['failed_tests']).join(', ')}
-      Error: #{summary['error_summary']}
-
-      TASK:
-      Please fix the #{type} failures identified above. Apply the minimal necessary change.
-      #{'Fix ONLY the first offense listed. Do not fix any others.' if fix_first_only}
-      You MUST provide your response in JSON format matching the requested schema. Provide the FULL content of the file for the 'content' field.
-
-      CRITICAL GUIDELINES:
-      - Focus your fix ONLY on the files mentioned in the error summary.
-      - DO NOT modify core system files in 'lib/core/' or 'lib/adapters/' or 'lib/planner/' unless they are the direct cause of the #{type} failure.
-      - If you think the bug is in the engine, REFUSE to fix and instead explain why in the 'explanation' field.
-      - Ensure your fix is minimal.
-
-      FAILING FILE CONTENTS:
-      #{Array(summary['files']).filter_map do |f|
-        path = File.expand_path(f['path'], Dir.pwd)
-        next unless File.exist?(path)
-
-        "--- FILE: #{f['path']} ---\n#{File.read(path)}\n"
-      end.join("\n")}
-
-      PERTINENT PROJECT FILES (for reference):
-      #{Dir.glob('{spec,lib}/**/*').reject { |f| File.directory?(f) }.join("\n")}
-      #{Array(summary['files']).filter_map { |f| f['path'] }.uniq.join("\n")}
-    PROMPT
-
-    schema = {
-      'type' => 'object',
-      'required' => %w[explanation patches],
-      'properties' => {
-        'explanation' => { 'type' => 'string' },
-        'patches' => {
-          'type' => 'array',
-          'items' => {
-            'type' => 'object',
-            'required' => %w[file content],
-            'properties' => {
-              'file' => { 'type' => 'string' },
-              'content' => { 'type' => 'string' }
-            }
-          }
-        }
-      }
-    }
-
-    adapter = build_adapter(selection[:engine])
-
-    @spinner.update(title: "Applying fix via #{selection[:engine]}...")
-    result = nil
-    @spinner.run do
-      adapter = build_adapter(selection[:engine])
-      if selection[:engine] == :ollama
-        result = adapter.call(fix_prompt, selection[:model], schema: schema)
-      else
-        raw = adapter.call(fix_prompt, selection[:model])
-        result = begin
-          JSON.parse(raw)
-        rescue StandardError
-          { 'explanation' => raw, 'patches' => [] }
+        # Escalate to executor for fix
+        if type == :lint
+          escalate_lint_one_at_a_time(summary, options.merge(verify_command: command))
+        else
+          escalate_to_executor(summary, options.merge(verify_command: command))
         end
       end
-    rescue StandardError => e
-      puts "\n⚠️ Fix failed via #{selection[:engine]}: #{e.message}. Retrying with local Ollama..."
-      fallback_adapter = OllamaAdapter.new
-      result = fallback_adapter.call(fix_prompt, schema: schema)
-    end
 
-    if result['patches']&.any?
-      result['patches'].each do |patch|
-        path = File.expand_path(patch['file'], Dir.pwd)
-        FileUtils.mkdir_p(File.dirname(path))
-        File.write(path, patch['content'])
-        puts "Applied fix to #{patch['file']} ✅"
+      def escalate_lint_one_at_a_time(summary, options)
+        max_iterations = 20
+        current_summary = summary
+
+        max_iterations.times do |iteration|
+          puts "\n--- Fix iteration #{iteration + 1}/#{max_iterations} ---" if iteration.positive?
+
+          success = escalate_to_executor(current_summary, options.merge(fix_first_only: true))
+          return true if success
+
+          @spinner.update(title: 'Re-running RuboCop...')
+          verify_result = nil
+          @spinner.run { verify_result = TerminalRunner.run(options[:verify_command]) }
+
+          return false if verify_result[:exit_status].zero?
+
+          @spinner.update(title: 'Summarizing remaining offenses...')
+          current_summary = nil
+          @spinner.run { current_summary = @tiny_processor.summarize_output(verify_result[:output], type: :lint) }
+
+          puts "\n--- Remaining offenses ---"
+          table = TTY::Table.new(header: %w[Attribute Value])
+          table << ['Failed Items', Array(current_summary['failed_items']).join("\n")]
+          table << ['Error Summary', current_summary['error_summary']]
+          puts table.render(:unicode, multiline: true)
+        end
+
+        puts "\nReached max iterations (#{max_iterations}). Some offenses may remain."
+        false
       end
-    else
-      puts "\nNo automated patches generated. Suggestion:"
-      puts result['explanation']
-    end
 
-    @spinner.update(title: 'Verifying fix...')
-    verify_result = nil
-    @spinner.run { verify_result = TerminalRunner.run(verify_command) }
+      def escalate_to_executor(summary, options)
+        type = options[:type] || :test
+        verify_command = options[:verify_command] || 'bundle exec rspec'
+        fix_first_only = options[:fix_first_only]
 
-    if verify_result[:exit_status].zero?
-      puts "Fix successful! #{type.to_s.capitalize} issues resolved. ✅"
-      true
-    else
-      puts "Fix failed. #{type.to_s.capitalize} issues still persist. ❌"
-      false
-    end
-  end
+        fix_plan = {
+          'task_type' => type == :test ? 'refactor' : 'architecture',
+          'risk_level' => 'medium',
+          'confidence' => 0.6
+        }
 
-  def run_lint(options)
-    run_diagnostic_loop('bundle exec rubocop -A', options.merge(type: :lint, title: 'Running RuboCop'))
-  end
+        selection = ModelSelector.select(fix_plan)
+        puts "Selected Engine for fix: #{selection[:engine]} (#{selection[:model] || 'default'})"
 
-  def build_adapter(engine)
-    case engine
-    when :claude then ClaudeAdapter.new
-    when :codex then CodexAdapter.new
-    when :cursor then CursorAdapter.new
-    when :ollama then OllamaAdapter.new
-    else
-      raise "Unsupported engine: #{engine}. Check your config/ares/models.yml"
+        context = ContextLoader.load
+        fix_prompt = <<~PROMPT
+          #{context}
+
+          DIAGNOSTIC SUMMARY (#{type.to_s.upcase}):
+          Failed Items: #{Array(summary['failed_items'] || summary['failed_tests']).join(', ')}
+          Error: #{summary['error_summary']}
+
+          TASK:
+          Please fix the #{type} failures identified above. Apply the minimal necessary change.
+          #{'Fix ONLY the first offense listed. Do not fix any others.' if fix_first_only}
+          You MUST provide your response in JSON format matching the requested schema. Provide the FULL content of the file for the 'content' field.
+
+          CRITICAL GUIDELINES:
+          - Focus your fix ONLY on the files mentioned in the error summary.
+          - DO NOT modify core system files in 'lib/core/' or 'lib/adapters/' or 'lib/planner/' unless they are the direct cause of the #{type} failure.
+          - If you think the bug is in the engine, REFUSE to fix and instead explain why in the 'explanation' field.
+          - Ensure your fix is minimal.
+
+          FAILING FILE CONTENTS:
+          #{Array(summary['files']).filter_map do |f|
+            path = File.expand_path(f['path'], Dir.pwd)
+            next unless File.exist?(path)
+
+            "--- FILE: #{f['path']} ---\n#{File.read(path)}\n"
+          end.join("\n")}
+
+          PERTINENT PROJECT FILES (for reference):
+          #{Dir.glob('{spec,lib}/**/*').reject { |f| File.directory?(f) }.join("\n")}
+          #{Array(summary['files']).filter_map { |f| f['path'] }.uniq.join("\n")}
+        PROMPT
+
+        adapter = build_adapter(selection[:engine])
+
+        result = nil
+        attempts = 0
+        max_attempts = 2
+
+        @spinner.run do
+          attempts += 1
+          @spinner.update(title: "Applying fix via #{selection[:engine]} (attempt #{attempts})...")
+
+          if selection[:engine] == :ollama
+            # Should not happen with current ModelSelector, but as a double-guard:
+            selection[:engine] = :claude
+            selection[:model] = 'sonnet'
+          end
+
+          adapter = build_adapter(selection[:engine])
+          raw = adapter.call(fix_prompt, selection[:model])
+
+          result = begin
+            JSON.parse(raw)
+          rescue StandardError
+            { 'explanation' => raw, 'patches' => [] }
+          end
+        rescue StandardError => e
+          raise "Escalation failed after #{attempts} attempts. Last error: #{e.message}" unless attempts < max_attempts
+
+          # Pick fallback: prefer Codex if Claude fails, or vice-versa
+          fallback_engine = selection[:engine] == :claude ? :codex : :claude
+          puts "\n⚠️ #{selection[:engine]} failed: #{e.message.split("\n").first}. Retrying with #{fallback_engine}..."
+          selection[:engine] = fallback_engine
+          selection[:model] = nil # Use default for fallback
+          retry
+        end
+
+        if result['patches']&.any?
+          result['patches'].each do |patch|
+            path = File.expand_path(patch['file'], Dir.pwd)
+            FileUtils.mkdir_p(File.dirname(path))
+            File.write(path, patch['content'])
+            puts "Applied fix to #{patch['file']} ✅"
+          end
+        else
+          puts "\nNo automated patches generated. Suggestion:"
+          puts result['explanation']
+        end
+
+        @spinner.update(title: 'Verifying fix...')
+        verify_result = nil
+        @spinner.run { verify_result = TerminalRunner.run(verify_command) }
+
+        if verify_result[:exit_status].zero?
+          puts "Fix successful! #{type.to_s.capitalize} issues resolved. ✅"
+          true
+        else
+          puts "Fix failed. #{type.to_s.capitalize} issues still persist. ❌"
+          false
+        end
+      end
+
+      def run_lint(options)
+        run_diagnostic_loop('bundle exec rubocop -A', options.merge(type: :lint, title: 'Running RuboCop'))
+      end
+
+      def build_adapter(engine)
+        case engine
+        when :claude then ClaudeAdapter.new
+        when :codex then CodexAdapter.new
+        when :cursor then CursorAdapter.new
+        when :ollama then OllamaAdapter.new
+        else
+          raise "Unsupported engine: #{engine}. Check your config/ares/models.yml"
+        end
+      end
     end
   end
 end

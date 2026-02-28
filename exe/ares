@@ -56,7 +56,7 @@ module Ares
       end.parse!
 
       if options[:tui]
-        Tui.start
+        Ares::Runtime::Tui.start
         exit
       end
 
@@ -67,7 +67,7 @@ module Ares
         exit 1
       end
 
-      Router.new.run(task, options)
+      Ares::Runtime::Router.new.run(task, options)
     end
   end
 end
