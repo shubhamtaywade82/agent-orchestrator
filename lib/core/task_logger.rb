@@ -9,7 +9,7 @@ class TaskLogger
   def initialize
     @task_id = SecureRandom.uuid
     @log_dir = File.expand_path('../../logs', __dir__)
-    Dir.mkdir(@log_dir) unless Dir.exist?(@log_dir)
+    FileUtils.mkdir_p(@log_dir)
   end
 
   def log_task(task, plan, selection)

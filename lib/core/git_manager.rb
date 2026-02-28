@@ -6,7 +6,7 @@ class GitManager
     base = `git rev-parse --verify main >/dev/null 2>&1 && echo main || echo master`.strip
 
     slug = if task_description
-             task_description.downcase.gsub(/[^a-z0-9]/, '-').gsub(/-+/, '-').slice(0, 40).strip.gsub(/^-|-$/, '')
+             task_description.downcase.gsub(/[^a-z0-9]/, '-').squeeze('-').slice(0, 40).strip.gsub(/^-|-$/, '')
            end
     branch_name = slug ? "task-#{task_id}-#{slug}" : "task-#{task_id}"
 

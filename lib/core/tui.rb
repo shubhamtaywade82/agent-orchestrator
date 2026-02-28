@@ -74,7 +74,7 @@ module Ares
         print stats_box
 
         # Recent History
-        history = Dir.glob(File.join(@log_dir, '*.json')).sort_by { |f| File.mtime(f) }.reverse.first(3)
+        history = Dir.glob(File.join(@log_dir, '*.json')).sort_by { |f| File.mtime(f) }.last(3).reverse
         history_box = TTY::Box.frame(
           width: width / 2,
           height: 6,

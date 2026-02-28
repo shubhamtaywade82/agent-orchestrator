@@ -19,4 +19,5 @@ Gem::Specification.new do |s|
   s.add_dependency 'json'
   s.add_dependency 'ollama-client', '~> 1.0'
   s.add_dependency 'yaml'
+  s.metadata['rubygems_mfa_required'] = 'true'
 end
