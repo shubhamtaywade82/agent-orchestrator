@@ -18,7 +18,6 @@ class ModelSelector
     # Use string key lookup as ConfigManager returns keys as strings sometimes
     rule = @config[task_type.to_sym] || @config[:refactor]
 
-
     {
       engine: rule[:engine].to_sym,
       model: rule[:model]
