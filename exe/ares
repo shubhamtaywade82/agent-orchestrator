@@ -7,16 +7,14 @@ require 'optparse'
 module Ares
   class CLI
     def self.start
-      command = ARGV.shift
-
-      case command
-      when 'init'    then init
-      when 'config'  then config
-      when 'doctor'  then doctor
-      when 'version' then version
-      when 'logs'    then logs
+      case ARGV.first
+      when 'init'    then ARGV.shift; init
+      when 'config'  then ARGV.shift; config
+      when 'doctor'  then ARGV.shift; doctor
+      when 'version' then ARGV.shift; version
+      when 'logs'    then ARGV.shift; logs
       else
-        run_task(command)
+        run_task
       end
     end
 
@@ -40,7 +38,7 @@ module Ares
       Ares::Runtime::LogsCLI.run
     end
 
-    def self.run_task(first_arg)
+    def self.run_task
       options = {
         dry_run: false,
         git: false,
@@ -60,7 +58,7 @@ module Ares
         exit
       end
 
-      task = ([first_arg] + ARGV).compact.join(' ').strip
+      task = ARGV.join(' ').strip
 
       if task.empty?
         puts 'No task provided.'
