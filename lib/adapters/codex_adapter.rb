@@ -1,5 +1,5 @@
 class CodexAdapter
-  def call(prompt, _model=nil)
+  def call(prompt, _model = nil)
     `codex exec "#{escape(prompt)}"`
   end
 

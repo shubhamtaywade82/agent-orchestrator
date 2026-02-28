@@ -1,0 +1,26 @@
+require:
+  - rubocop-performance
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  Exclude:
+    - 'bin/**/*'
+    - 'exe/**/*'
+    - 'vendor/**/*'
+    - 'Gemfile'
+    - 'ares-runtime.gemspec'
+
+Style/Documentation:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Metrics/BlockLength:
+  Exclude:
+    - 'spec/**/*'
+    - 'lib/core/tui.rb' # TUI layout is naturally block-heavy
+
+Layout/LineLength:
+  Max: 120

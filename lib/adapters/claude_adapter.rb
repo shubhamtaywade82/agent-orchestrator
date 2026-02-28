@@ -1,6 +1,6 @@
 class ClaudeAdapter
   def call(prompt, model)
-    model ||= "sonnet"
+    model ||= 'sonnet'
     `claude --model #{model} "#{escape(prompt)}"`
   end
 

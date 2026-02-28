@@ -1,4 +1,4 @@
-require "ollama_client"
+require 'ollama_client'
 
 class TinyTaskProcessor
   def initialize
@@ -8,15 +8,15 @@ class TinyTaskProcessor
 
   def summarize_test_output(output)
     schema = {
-      "type" => "object",
-      "required" => ["failed_tests", "error_summary"],
-      "additionalProperties" => false,
-      "properties" => {
-        "failed_tests" => {
-          "type" => "array",
-          "items" => { "type" => "string" }
+      'type' => 'object',
+      'required' => %w[failed_tests error_summary],
+      'additionalProperties' => false,
+      'properties' => {
+        'failed_tests' => {
+          'type' => 'array',
+          'items' => { 'type' => 'string' }
         },
-        "error_summary" => { "type" => "string" }
+        'error_summary' => { 'type' => 'string' }
       }
     }
 
@@ -32,18 +32,18 @@ class TinyTaskProcessor
 
   def summarize_diff(diff)
     schema = {
-      "type" => "object",
-      "required" => ["modified_files", "change_summary", "risk_level"],
-      "additionalProperties" => false,
-      "properties" => {
-        "modified_files" => {
-          "type" => "array",
-          "items" => { "type" => "string" }
+      'type' => 'object',
+      'required' => %w[modified_files change_summary risk_level],
+      'additionalProperties' => false,
+      'properties' => {
+        'modified_files' => {
+          'type' => 'array',
+          'items' => { 'type' => 'string' }
         },
-        "change_summary" => { "type" => "string" },
-        "risk_level" => {
-          "type" => "string",
-          "enum" => ["low", "medium", "high"]
+        'change_summary' => { 'type' => 'string' },
+        'risk_level' => {
+          'type' => 'string',
+          'enum' => %w[low medium high]
         }
       }
     }

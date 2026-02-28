@@ -1,4 +1,4 @@
-require "tty-command"
+require 'tty-command'
 
 class TerminalRunner
   def self.run(cmd)

@@ -1,5 +1,5 @@
 class CursorAdapter
-  def call(prompt, _model=nil)
+  def call(prompt, _model = nil)
     `cursor agent "#{escape(prompt)}"`
   end
 
