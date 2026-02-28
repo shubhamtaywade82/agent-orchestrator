@@ -1,36 +1,43 @@
 # frozen_string_literal: true
 
 require 'ollama_client'
+require 'timeout'
 require_relative '../../../../config/planner_schema'
+require_relative '../ollama_client_factory'
+
 module Ares
   module Runtime
     class OllamaPlanner
-      def initialize
-        config_data = ConfigManager.load_ollama
-        config = Ollama::Config.new
-        config.base_url = config_data[:base_url]
-        config.timeout = 5 # Strict 5s timeout for local planning
-        config.num_ctx = config_data[:num_ctx]
-        @client = Ollama::Client.new(config: config)
+      PLANNER_TIMEOUT = 30 # Longer once health is verified
+      HARD_TIMEOUT = 35
+
+      def initialize(healthy: true)
+        @healthy = healthy
+        @client = healthy ? OllamaClientFactory.build(timeout_seconds: PLANNER_TIMEOUT) : nil
       end
 
       def plan(task)
-        @client.generate(
-          prompt: build_prompt(task),
-          schema: PLANNER_SCHEMA
-        )
-      rescue StandardError => e
-        # Safe Mode Fallback: Return a default high-level plan if Ollama is down
+        return safe_default_plan(task) unless @healthy
+
+        OllamaClientFactory.with_resilience(
+          hard_timeout: HARD_TIMEOUT,
+          fallback_value: safe_default_plan(task)
+        ) do
+          @client.generate(prompt: build_prompt(task), schema: PLANNER_SCHEMA)
+        end
+      end
+
+      private
+
+      def safe_default_plan(task)
         {
           'task_type' => 'refactor',
           'risk_level' => 'medium',
           'confidence' => 1.0,
           'slices' => [task],
-          'explanation' => "Safe Mode: Ollama unavailable (#{e.message.split("\n").first}). Proceeding with default refactor plan."
+          'explanation' => 'Safe Mode Default: Proceeding with high-level refactor plan.'
         }
       end
-
-      private
 
       def build_prompt(task)
         <<~PROMPT

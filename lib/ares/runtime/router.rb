@@ -4,7 +4,8 @@ module Ares
   module Runtime
     class Router
       def initialize
-        @planner = OllamaPlanner.new
+        @ollama_healthy = OllamaClientFactory.health_check?
+        @planner = OllamaPlanner.new(healthy: @ollama_healthy)
         @logger = TaskLogger.new
       end
 
@@ -12,7 +13,7 @@ module Ares
         puts "Task ID: #{@logger.task_id}"
         check_quota!
 
-        @tiny_processor = Ares::Runtime::TinyTaskProcessor.new
+        @tiny_processor = Ares::Runtime::TinyTaskProcessor.new(healthy: @ollama_healthy)
         @spinner = TTY::Spinner.new('[:spinner] :title', format: :dots)
 
         shortcut_result = match_shortcut_task(task, options)
@@ -200,7 +201,11 @@ module Ares
         attempts = 0
         fallback_chain.each do |current_engine|
           attempts += 1
-          @spinner.update(title: "Executing task via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})...")
+          if attempts > 1
+            puts "Falling back to #{current_engine} (attempt #{attempts}/#{fallback_chain.size})..."
+          else
+            puts "Executing task via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})..."
+          end
 
           begin
             QuotaManager.increment_usage(current_engine)
@@ -250,7 +255,11 @@ module Ares
         attempts = 0
         fallback_chain.each do |current_engine|
           attempts += 1
-          @spinner.update(title: "Applying fix via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})...")
+          if attempts > 1
+            puts "Falling back to #{current_engine} for fix (attempt #{attempts}/#{fallback_chain.size})..."
+          else
+            puts "Applying fix via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})..."
+          end
           create_checkpoint(current_engine)
 
           begin

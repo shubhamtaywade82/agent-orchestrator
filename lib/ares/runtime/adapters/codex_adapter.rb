@@ -1,18 +1,19 @@
 # frozen_string_literal: true
 
 require 'open3'
+require 'timeout'
 
 module Ares
   module Runtime
     # Adapter for OpenAI Codex CLI. Uses exec mode with full automation for headless environments.
     class CodexAdapter
+      ADAPTER_TIMEOUT = 30
+
       def call(prompt, _model = nil, resume: true)
-        # Use codex exec for non-interactive mode.
-        # --full-auto is the correct flag for low-friction automation.
         cmd = ['codex', 'exec', '--full-auto', '-']
         cmd << '--resume' if resume
 
-        output, status = Open3.capture2e(*cmd, stdin_data: prompt)
+        output, status = execute_with_timeout(cmd, prompt)
 
         output, status = retry_without_resume(cmd, prompt) if should_retry?(status, output)
 
@@ -28,13 +29,21 @@ module Ares
 
       private
 
+      def execute_with_timeout(cmd, prompt)
+        Timeout.timeout(ADAPTER_TIMEOUT) do
+          Open3.capture2e(*cmd, stdin_data: prompt)
+        end
+      rescue Timeout::Error => e
+        raise "Codex command timed out after #{ADAPTER_TIMEOUT}s: #{e.message}"
+      end
+
       def should_retry?(status, output)
         !status.success? && (output.include?('No session found') || output.include?('error: unexpected argument'))
       end
 
       def retry_without_resume(cmd, prompt)
         cmd.delete('--resume')
-        Open3.capture2e(*cmd, stdin_data: prompt)
+        execute_with_timeout(cmd, prompt)
       end
     end
   end
