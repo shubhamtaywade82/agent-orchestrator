@@ -23,8 +23,12 @@ module Ares
       def self.health_check?
         Timeout.timeout(5) do
           client = build(timeout_seconds: 4)
-          # 'tags' call is a lightweight way to check connectivity
-          client.tags
+          # Use list_models (0.2.x+) or tags (1.0.x) — both confirm connectivity
+          if client.respond_to?(:list_models)
+            client.list_models
+          else
+            client.tags
+          end
           true
         end
       rescue StandardError, Timeout::Error
