@@ -9,7 +9,10 @@ Gem::Specification.new do |s|
   s.description = 'A production-grade control plane for routing tasks to Claude, Codex, and Cursor with local planning.'
   s.authors     = ['Antigravity']
   s.email       = ['shubhamtaywade82@gmail.com']
-  s.files       = Dir.glob('{exe,bin,lib,config}/**/*') + ['README.md', 'Gemfile', 'LICENSE.txt']
+  s.files       = Dir.glob('lib/**/*.rb') +
+                  Dir.glob('exe/*') +
+                  Dir.glob('config/*.yml') +
+                  ['README.md', 'LICENSE.txt', 'CHANGELOG.md']
   s.executables = ['ares']
   s.bindir      = 'exe'
   s.homepage    = 'https://github.com/shubhamtaywade82/agent-orchestrator'

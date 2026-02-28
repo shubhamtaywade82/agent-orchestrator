@@ -40,10 +40,10 @@ require_relative 'ares/runtime/planner/ollama_planner'
 require_relative 'ares/runtime/planner/tiny_task_processor'
 
 # Adapters
-require_relative 'adapters/claude_adapter'
-require_relative 'adapters/codex_adapter'
-require_relative 'adapters/cursor_adapter'
-require_relative 'adapters/ollama_adapter'
+require_relative 'ares/runtime/adapters/claude_adapter'
+require_relative 'ares/runtime/adapters/codex_adapter'
+require_relative 'ares/runtime/adapters/cursor_adapter'
+require_relative 'ares/runtime/adapters/ollama_adapter'
 
 # Runtime CLI Commands
 require_relative 'ares/runtime'
