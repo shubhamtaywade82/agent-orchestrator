@@ -15,7 +15,7 @@ module Ares
       end
 
       def call(prompt, model = nil, schema: nil)
-        available = @client.list_model_names
+        available = available_model_names
         model = available.include?(model) ? model : best_available_model(available)
 
         options = { prompt: prompt, model: model }
@@ -26,8 +26,16 @@ module Ares
 
       private
 
+      def available_model_names
+        if @client.respond_to?(:list_model_names)
+          @client.list_model_names
+        else
+          @client.list_models
+        end
+      end
+
       def best_available_model(available = nil)
-        available ||= @client.list_model_names
+        available ||= available_model_names
         return 'qwen3:latest' if available.include?('qwen3:latest')
         return 'qwen3:8b' if available.include?('qwen3:8b')
 
