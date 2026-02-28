@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+set -x
+
+bundle install
+
+# Do any other automated setup that needs to happen to run your executable

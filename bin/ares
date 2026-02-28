@@ -1,27 +1,3 @@
 #!/usr/bin/env ruby
-
-$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "core/router"
-require "optparse"
-
-options = {}
-OptionParser.new do |opts|
-  opts.banner = "Usage: ares [options] \"task description\""
-
-  opts.on("-d", "--dry-run", "Plan without execution") do |d|
-    options[:dry_run] = d
-  end
-
-  opts.on("-g", "--git", "Enable git auto-branching/committing") do |g|
-    options[:git] = g
-  end
-end.parse!
-
-task = ARGV.join(" ")
-
-if task.empty?
-  puts "Usage: ares [options] \"task description\""
-  exit 1
-end
-
-Router.new.run(task, options)
+# Local development stub pointing to exe/ares
+load File.expand_path('../exe/ares', __dir__)

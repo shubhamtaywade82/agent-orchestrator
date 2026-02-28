@@ -1,10 +1,20 @@
+require "tty-command"
+
 class TerminalRunner
   def self.run(cmd)
-    output = `#{cmd} 2>&1`
+    @cmd ||= TTY::Command.new(printer: :null)
+    result = @cmd.run!(cmd)
+
     {
       command: cmd,
-      output: output,
-      exit_status: $?.exitstatus
+      output: result.out + result.err,
+      exit_status: result.exit_status
+    }
+  rescue TTY::Command::ExitError => e
+    {
+      command: cmd,
+      output: e.message,
+      exit_status: 1
     }
   end
 end

@@ -37,13 +37,13 @@ bundle install
 
 Run a task:
 ```bash
-bin/ares "Task description"
+exe/ares "Task description"
 ```
 
 ### Automated Diagnostic Loop
 To run tests and automatically attempt fixes for failures:
 ```bash
-bin/ares "run tests"
+exe/ares "run tests"
 ```
 
 ### Flags
