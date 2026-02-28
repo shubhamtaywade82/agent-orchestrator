@@ -13,12 +13,15 @@ module Ares
       protected
 
       def build_command(prompt, _model, resume: true, cloud: false, **_options)
+        # Force strict non-conversational behavior for Cursor Agent
+        agent_prompt = "ACT AS AN AUTONOMOUS AGENT. PERFORM THE FOLLOWING TASK. DO NOT CHAT.\nTASK: #{prompt}"
         # --trust --yolo ensures no interactive prompts in headless mode
-        cmd = ['agent', prompt, '--print', '--trust', '--yolo']
+        cmd = ['agent', agent_prompt, '--print', '--trust', '--yolo']
         cmd << '-c' if cloud
         cmd << '--continue' if resume && !cloud
         cmd
       end
+
 
       def pipes_prompt_to_stdin?
         false
@@ -30,6 +33,10 @@ module Ares
 
       def build_retry_command(cmd, _prompt, **_options)
         cmd.dup.tap { |c| c.delete('--continue') }
+      end
+
+      def timeout_seconds
+        300 # Increased timeout for complex agent tasks
       end
     end
   end

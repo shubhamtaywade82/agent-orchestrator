@@ -9,7 +9,7 @@ module Ares
   module Runtime
     # Chain of Responsibility Handler linking CLI engines for automated fallback.
     class EngineChain
-      CAPABLE_ENGINES = %w[claude codex cursor].freeze
+      CAPABLE_ENGINES = %w[claude codex cursor ollama].freeze
 
       attr_accessor :next_handler
       attr_reader :engine_name
@@ -58,10 +58,12 @@ module Ares
         block&.call(@engine_name)
 
         QuotaManager.increment_usage(@engine_name)
-        @adapter.call(prompt, options[:model], **adapter_options(options))
+        opts = adapter_options(options)
+        opts[:schema] = options[:schema] if options[:schema]
+        @adapter.call(prompt, options[:model], **opts)
       rescue StandardError => e
         failed_msg = mode == :fix ? "#{@engine_name} failed during fix:" : "#{@engine_name} failed:"
-        puts "\n⚠️ #{failed_msg} #{e.message.split("\n").first}"
+        puts "\n❌ #{failed_msg} #{e.message.split("\n").first}"
         raise all_engines_failed_message(mode) unless @next_handler
 
         next_method = mode == :fix ? :call_fix : :call
@@ -70,12 +72,12 @@ module Ares
 
       def status_message(attempt, total, mode)
         action = if attempt > 1
-          'Falling back to'
-        elsif mode == :fix
-          'Applying fix via'
-        else
-          'Executing task via'
-        end
+                   'Falling back to'
+                 elsif mode == :fix
+                   'Applying fix via'
+                 else
+                   'Executing task via'
+                 end
         "#{action} #{@engine_name} (attempt #{attempt}/#{total})..."
       end
 

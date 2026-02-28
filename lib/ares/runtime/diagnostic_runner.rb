@@ -35,11 +35,15 @@ module Ares
 
         return skip_escalation if options[:dry_run]
 
-        FixApplicator.new(core: @core, spinner: @spinner, diagnostic_runner: self).escalate(options.merge(
+        applicator = FixApplicator.new(core: @core, spinner: @spinner, diagnostic_runner: self)
+        result = applicator.escalate(
           type: options[:type] || :test,
           summary: summary,
-          verify_command: command
-        ))
+          verify_command: command,
+          fix_first_only: !!options[:fix_first_only]
+        )
+
+        return result if options[:fail_fast]
       end
 
       def print_summary(summary, type, title: nil)
@@ -62,13 +66,17 @@ module Ares
 
       def parse_summary(output, title, type)
         @spinner.update(title: "#{title} failed. Summarizing diagnostic output...")
+        summary = nil
         @spinner.run do
-          summary = DiagnosticParser.parse(output, type: type)
-          return summary unless summary['files'].empty? || summary['failed_items'].empty?
-
-          @spinner.update(title: "#{title} failed. LLM Fallback (Slow)...")
-          @core.tiny_processor.summarize_output(output, type: type)
+          parsed = DiagnosticParser.parse(output, type: type)
+          if parsed['files'].empty? && parsed['failed_items'].empty?
+            @spinner.update(title: "#{title} failed. LLM Fallback (Slow)...")
+            summary = @core.tiny_processor.summarize_output(output, type: type)
+          else
+            summary = parsed
+          end
         end
+        summary
       rescue StandardError => e
         @spinner.update(title: "#{title} failed. Error in fast-path: #{e.message}. LLM Fallback...")
         @spinner.run { @core.tiny_processor.summarize_output(output, type: type) }

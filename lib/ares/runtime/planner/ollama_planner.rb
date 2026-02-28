@@ -8,8 +8,8 @@ require_relative '../ollama_client_factory'
 module Ares
   module Runtime
     class OllamaPlanner
-      PLANNER_TIMEOUT = 30 # Longer once health is verified
-      HARD_TIMEOUT = 35
+      PLANNER_TIMEOUT = 60 # Longer once health is verified
+      HARD_TIMEOUT = 65
 
       def initialize(healthy: true)
         @healthy = healthy
