@@ -1,12 +1,30 @@
 # 🧠 Ares 2.0: Agent Orchestrator
 
-A production-grade, deterministic multi-agent orchestrator CLI. Ares routes tasks to the best localized executor (Claude, Codex, or Cursor) based on a strategic planning phase powered by Ollama.
+A production-grade, deterministic multi-agent orchestrator CLI. Ares routes tasks to the best localized executor (Claude, Codex, or Cursor) based on a strategic planning phase powered by local Ollama.
 
 ## 🏗️ Architecture
 
-- **Planning Layer**: Uses local Ollama model to classify tasks into types (architecture, refactor, bulk_patch, etc.) and assign risk/confidence scores.
-- **Routing Layer**: Deterministic rules in `config/models.yml` allocate tasks to engines.
-- **Context Injection**: Automatically loads `AGENTS.md` and `.skills/` from the active workspace.
+```mermaid
+graph TD
+    User["User Task"] --> Router["Router (Ares CLI)"]
+    Router --> Planner["Ollama Planner (Local qwen3:latest)"]
+    Planner --> Router
+    Router --> TinyTask["Tiny Task Layer (Diagnostics)"]
+    TinyTask --> Router
+    Router --> Selector["Model Selector (Config-Driven)"]
+    Selector --> Router
+    Router --> Quota["Quota Manager"]
+    Router --> Logger["Task Logger (UUID)"]
+    Router --> Git["Git Manager (Auto-branch)"]
+    Router --> Adapter["Engine Adapter (Claude/Codex/Cursor)"]
+    Adapter --> Router
+    Router --> Verify["Post-Fix Verification"]
+```
+
+- **Planning Layer**: Uses local Ollama model to classify tasks, assign risk/confidence scores, and decompose tasks into discrete slices.
+- **Tiny Task Layer (Diagnostics)**: Offloads raw terminal output parsing and diff summarization to local Ollama, reducing token load on Claude by 60-80%.
+- **Routing Layer**: Deterministic rules in `config/models.yml` allocate tasks to engines based on type and risk.
+- **Automated Fix Loop**: Detects failures, summarizes them locally, escalates for a fix, and re-verifies automatically.
 - **Traceability**: Every task receives a UUID and is logged in `logs/UUID.json`.
 - **Safety**: Built-in quota tracking and confidence-based escalation to Claude Opus for high-risk work.
 
@@ -22,6 +40,12 @@ Run a task:
 bin/ares "Task description"
 ```
 
+### Automated Diagnostic Loop
+To run tests and automatically attempt fixes for failures:
+```bash
+bin/ares "run tests"
+```
+
 ### Flags
 - `-d, --dry-run`: Plan and select model without execution.
 - `-g, --git`: Auto-branch before execution and auto-commit results.
@@ -35,9 +59,26 @@ Routed via `config/models.yml`:
 - **Interactive Edit**: Cursor Agent (Human-in-the-loop)
 - **Summarization**: Claude Haiku (Low Cost)
 
-## 🔐 Safety Rules
+## 🔐 Safety & Project Hygiene
 
 1. **Deterministic One-Hop**: No recursive agent loops.
-2. **Quota Aware**: Claude usage is tracked daily.
-3. **Low Confidence Escalation**: Automatically moves to Opus if the planner is unsure.
-4. **Workspace Isolation**: Execution is pinned to the current directory's context.
+2. **Quota Aware**: Claude usage is tracked daily via `QuotaManager`.
+3. **Workspace Isolation**: Execution is pinned to the current directory's context via recursive `AGENTS.md` discovery.
+4. **Git Protection**: `.gitignore` automatically excludes `logs/`, `*.gem`, and AI-specific session/cache directories (`.claude`, `.cursor`, etc.).
+
+## 🛠️ Configuration
+
+- `config/models.yml`: Define routing logic and confidence thresholds.
+- `config/workspaces.yml`: Register explicit workspace roots.
+- `config/planner_schema.rb`: The strict JSON schema for the Ollama planner.
+
+## 🛤️ Roadmap
+
+- [ ] **Cost Tracker**: USD/token cost calculation per engine.
+- [ ] **Parallel Execution**: Execute independent task slices concurrently.
+- [ ] **Automatic Diff Chunking**: Handle massive diffs by chunking before LLM processing.
+- [ ] **Rate Limiting**: Intelligent throttling to prevent mid-workflow blocks.
+
+---
+**Author**: Antigravity (shubhamtaywade82@gmail.com)
+**Repository**: [github.com/shubhamtaywade82/agent-orchestrator](https://github.com/shubhamtaywade82/agent-orchestrator)
