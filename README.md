@@ -106,5 +106,5 @@ Routed via `config/models.yml`:
 - [ ] **Rate Limiting**: Intelligent throttling to prevent mid-workflow blocks.
 
 ---
-**Author**: Antigravity (shubhamtaywade82@gmail.com)
+**Author**: Shubham (shubhamtaywade82@gmail.com)
 **Repository**: [github.com/shubhamtaywade82/agent-orchestrator](https://github.com/shubhamtaywade82/agent-orchestrator)

@@ -7,7 +7,7 @@ Gem::Specification.new do |s|
   s.version     = Ares::Runtime::VERSION
   s.summary     = 'Deterministic Multi-Agent Orchestrator'
   s.description = 'A production-grade control plane for routing tasks to Claude, Codex, and Cursor with local planning.'
-  s.authors     = ['Antigravity']
+  s.authors     = ['Shubham']
   s.email       = ['shubhamtaywade82@gmail.com']
   s.files       = Dir.glob('lib/**/*.rb') +
                   Dir.glob('exe/*') +
