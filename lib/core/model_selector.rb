@@ -5,7 +5,6 @@ require_relative 'config_manager'
 
 class ModelSelector
   CONFIDENCE_THRESHOLD = 0.7
-  CONFIG_PATH = File.expand_path('../../.config/models.yml', __dir__)
 
   def self.select(plan)
     @config = Ares::Runtime::ConfigManager.load_models

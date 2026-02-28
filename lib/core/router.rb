@@ -275,7 +275,7 @@ class Router
     when :cursor then CursorAdapter.new
     when :ollama then OllamaAdapter.new
     else
-      raise "Unsupported engine: #{engine}. Check your config/models.yml"
+      raise "Unsupported engine: #{engine}. Check your config/ares/models.yml"
     end
   end
 end

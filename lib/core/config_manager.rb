@@ -7,14 +7,14 @@ module Ares
   module Runtime
     class ConfigManager
       GLOBAL_DIR = File.expand_path('~/.ares')
-      LOCAL_DIR = File.join(Dir.pwd, 'config')
 
+      # Public API -----------------------------------------------------------
       def self.load_models
-        load_config('models.yml')
+        load_merged('models.yml')
       end
 
       def self.load_ollama
-        load_config('ollama.yml')
+        load_merged('ollama.yml')
       end
 
       def self.save_models(config)
@@ -35,11 +35,39 @@ module Ares
         save_models(config)
       end
 
+      # -------------------------------------------------------------------
+      # Internal helpers
+      def self.load_merged(filename)
+        merged = {}
+        merged = deep_merge(merged, load_file(gem_default_path(filename)))
+        merged = deep_merge(merged, load_file(global_path(filename)))
+        deep_merge(merged, load_file(local_path(filename)))
+      end
+
+      def self.load_file(path)
+        return {} unless File.exist?(path)
+
+        data = YAML.load_file(path)
+        return {} unless data.is_a?(Hash)
+
+        symbolize_keys(data)
+      rescue StandardError
+        {}
+      end
+
+      def self.save_config(filename, config)
+        target = File.exist?(local_path(filename)) ? local_path(filename) : global_path(filename)
+        FileUtils.mkdir_p(File.dirname(target))
+        File.write(target, stringify_keys(config || {}).to_yaml)
+      end
+
+      # Path helpers --------------------------------------------------------
       def self.project_root
         dir = Dir.pwd
 
         loop do
-          return dir if File.exist?(File.join(dir, 'config', 'models.yml'))
+          # Look for the namespaced config directory
+          return dir if File.exist?(File.join(dir, 'config', 'ares', 'models.yml'))
 
           parent = File.dirname(dir)
           break if parent == dir
@@ -50,47 +78,38 @@ module Ares
         Dir.pwd
       end
 
-      def self.local_dir
-        File.join(project_root, 'config')
+      def self.local_path(filename)
+        File.join(project_root, 'config', 'ares', filename)
       end
 
-      def self.load_config(filename)
-        # 1️⃣ Local project config
-        local_path = File.join(local_dir, filename)
-        if File.exist?(local_path)
-          data = YAML.load_file(local_path)
-          return symbolize_keys(data) if data.is_a?(Hash)
-        end
-
-        # 2️⃣ Global config
-        global_path = File.join(GLOBAL_DIR, filename)
-        if File.exist?(global_path)
-          data = YAML.load_file(global_path)
-          return symbolize_keys(data) if data.is_a?(Hash)
-        end
-
-        # 3️⃣ Gem defaults
-        gem_default = gem_default_path(filename)
-        if File.exist?(gem_default)
-          data = YAML.load_file(gem_default)
-          return symbolize_keys(data) if data.is_a?(Hash)
-        end
-
-        {}
+      def self.global_path(filename)
+        File.join(GLOBAL_DIR, filename)
       end
 
       def self.gem_default_path(filename)
-        gem_root = Gem::Specification.find_by_name('agent-orchestrator').gem_dir
-        File.join(gem_root, 'config', filename)
+        spec = Gem.loaded_specs['ares-runtime'] || begin
+          Gem::Specification.find_by_name('ares-runtime')
+        rescue StandardError
+          nil
+        end
+        if spec
+          File.join(spec.gem_dir, 'config', filename)
+        else
+          File.expand_path("../../config/#{filename}", __dir__)
+        end
       end
 
-      def self.save_config(filename, config)
-        # If local config exists, update it. Otherwise, update global.
-        local_path = File.join(local_dir, filename)
-        target_path = File.exist?(local_path) ? local_path : File.join(GLOBAL_DIR, filename)
-
-        FileUtils.mkdir_p(File.dirname(target_path))
-        File.write(target_path, stringify_keys(config || {}).to_yaml)
+      # Utility methods ------------------------------------------------------
+      def self.deep_merge(hash1, hash2)
+        result = hash1.dup
+        hash2.each do |key, value|
+          result[key] = if result[key].is_a?(Hash) && value.is_a?(Hash)
+                          deep_merge(result[key], value)
+                        else
+                          value
+                        end
+        end
+        result
       end
 
       def self.symbolize_keys(hash)
