@@ -238,7 +238,18 @@ module Ares
         raw = chain.call_fix(fix_prompt, adapter_opts, total: fallback_chain.size) do |current_engine|
           create_checkpoint(current_engine)
         end
-        JSON.parse(raw)
+        parse_robust_json(raw)
+      end
+
+      def parse_robust_json(raw)
+        json_str = raw.match(/```(?:json)?\s*(.*?)\s*```/m)&.captures&.first || raw
+        begin
+          JSON.parse(json_str)
+        rescue JSON::ParserError => e
+          puts "\n⚠️ Failed to parse valid JSON from the AI engine's response."
+          puts "--- Raw Output ---\n#{raw}\n----------------"
+          raise e
+        end
       end
 
       def apply_patches(result)
