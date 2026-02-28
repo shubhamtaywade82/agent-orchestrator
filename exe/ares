@@ -15,7 +15,16 @@ OptionParser.new do |opts|
   opts.on("-g", "--git", "Enable git auto-branching/committing") do |g|
     options[:git] = g
   end
+
+  opts.on("--tui", "Launch interactive TUI") do |t|
+    options[:tui] = t
+  end
 end.parse!
+
+if options[:tui]
+  Ares::Runtime::Tui.start
+  exit
+end
 
 task = ARGV.join(" ")
 

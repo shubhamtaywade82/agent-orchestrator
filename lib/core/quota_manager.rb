@@ -3,7 +3,16 @@ require "date"
 
 class QuotaManager
   QUOTA_FILE = File.expand_path("../../.quota.json", __dir__)
-  DAILY_CLAUDE_LIMIT = 50 # Example limit
+  LIMITS = { claude: 50, codex: 100 }
+
+  def self.usage
+    data = load_data
+    today = Date.today.to_s
+    {
+      claude: data[today] || 0,
+      codex: 0 # Tracked separately or placeholder
+    }
+  end
 
   def self.increment_usage(engine)
     return unless engine == :claude
@@ -18,9 +27,7 @@ class QuotaManager
   end
 
   def self.remaining_quota
-    data = load_data
-    today = Date.today.to_s
-    DAILY_CLAUDE_LIMIT - (data[today] || 0)
+    LIMITS[:claude] - usage[:claude]
   end
 
   def self.quota_exceeded?
