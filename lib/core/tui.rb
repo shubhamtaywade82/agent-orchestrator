@@ -6,6 +6,7 @@ require "tty-prompt"
 require_relative "router"
 require_relative "task_logger"
 require_relative "quota_manager"
+require_relative "config_manager"
 
 module Ares
   module Runtime

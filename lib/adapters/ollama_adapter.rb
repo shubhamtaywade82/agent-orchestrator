@@ -1,4 +1,5 @@
 require 'ollama_client'
+require_relative '../core/config_manager'
 
 class OllamaAdapter
   def initialize

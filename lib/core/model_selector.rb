@@ -1,11 +1,12 @@
 require "yaml"
+require_relative "config_manager"
 
 class ModelSelector
   CONFIDENCE_THRESHOLD = 0.7
   CONFIG_PATH = File.expand_path("../../config/models.yml", __dir__)
 
   def self.select(plan)
-    @config = YAML.load_file(CONFIG_PATH)
+    @config = Ares::Runtime::ConfigManager.load_models
 
     task_type = plan["task_type"]
     confidence = plan["confidence"] || 1.0
@@ -15,11 +16,12 @@ class ModelSelector
       return { engine: :claude, model: "opus" }
     end
 
-    rule = @config[task_type] || @config["refactor"]
+    # Use string key lookup as ConfigManager returns keys as strings sometimes
+    rule = @config[task_type.to_s] || @config["refactor"]
 
     {
-      engine: rule["engine"].to_sym,
-      model: rule["model"]
+      engine: rule[:engine].to_sym,
+      model: rule[:model]
     }
   end
 end
