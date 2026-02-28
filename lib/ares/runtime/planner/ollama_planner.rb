@@ -2,7 +2,7 @@
 
 require 'ollama_client'
 require 'timeout'
-require_relative '../../../../config/planner_schema'
+require_relative 'planner_schema'
 require_relative '../ollama_client_factory'
 
 module Ares
