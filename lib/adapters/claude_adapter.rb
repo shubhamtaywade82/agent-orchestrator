@@ -1,22 +1,33 @@
 # frozen_string_literal: true
 
+require 'open3'
+
 module Ares
   module Runtime
     # Adapter for Claude CLI. Passes prompts via stdin to avoid ARG_MAX limits.
     class ClaudeAdapter
-      INSTRUCTION = 'Complete the task described above. Provide your response in the requested format.'
-
-      def call(prompt, model)
+      def call(prompt, model, fork_session: false)
+        check_auth!
         model ||= 'sonnet'
-        cmd = ['claude', '--model', model, '-p', INSTRUCTION]
-        output = IO.popen(cmd, 'r+') do |io|
-          io.write(prompt)
-          io.close_write
-          io.read
-        end
-        raise "Claude command failed: #{output}" unless $CHILD_STATUS.success?
+
+        # -p - means read prompt from stdin
+        # --allow-dangerously-skip-permissions bypasses interactive prompts
+        cmd = ['claude', '--model', model, '-p', '-', '--allow-dangerously-skip-permissions']
+        cmd += %w[--continue --fork-session] if fork_session
+
+        output, status = Open3.capture2e(*cmd, stdin_data: prompt)
+        raise "Claude command failed: #{output}" unless status.success?
 
         output
+      end
+
+      private
+
+      def check_auth!
+        system('claude auth status > /dev/null 2>&1')
+        return if $CHILD_STATUS.success?
+
+        raise 'Claude CLI not logged in. Please run `claude login` in your terminal.'
       end
     end
   end

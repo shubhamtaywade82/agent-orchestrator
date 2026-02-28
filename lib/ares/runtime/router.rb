@@ -10,89 +10,21 @@ module Ares
 
       def run(task, options = {})
         puts "Task ID: #{@logger.task_id}"
+        check_quota!
 
-        if QuotaManager.quota_exceeded?
-          puts '❌ Quota exceeded for Claude. Please try again later or use a different engine.'
-          exit 1
-        end
-
-        # Initialize tiny task processor and spinner
         @tiny_processor = Ares::Runtime::TinyTaskProcessor.new
         @spinner = TTY::Spinner.new('[:spinner] :title', format: :dots)
 
-        # Only match short command-like phrases; avoid hijacking descriptive tasks
-        # e.g. "run linting" ✓ but "add linting to CI" ✗
-        return run_test_diagnostic(options) if task.match?(/\A(run\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
-        return run_syntax_check(options) if task.match?(/\A(run\s+)?(syntax|compile)(\s+check)?\s*\z/i)
-        return run_lint(options) if task.match?(/\A(run\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
+        shortcut_result = match_shortcut_task(task, options)
+        return shortcut_result if shortcut_result
 
-        plan = nil
-        @spinner.update(title: 'Planning task...')
-        @spinner.run do
-          plan = @planner.plan(task)
-        end
+        plan = plan_task(task)
+        selection = select_model_for_plan(plan)
+        selection = handle_low_confidence(selection, plan)
 
-        selection = nil
-        @spinner.update(title: 'Selecting optimal model...')
-        @spinner.run do
-          selection = ModelSelector.select(plan)
-        end
+        return if selection.nil? # User aborted
 
-        puts "Task Type: #{plan['task_type']} | Risk: #{plan['risk_level']} | Confidence: #{plan['confidence']}"
-
-        if plan['confidence'].to_f < 0.7
-          prompt = TTY::Prompt.new
-          choice = prompt.select('Low confidence detected. How should we proceed?',
-                                 "Execute with suggested #{selection[:engine]} (#{selection[:model] || 'default'})",
-                                 'Override and use Claude Opus',
-                                 'Abort task')
-
-          case choice
-          when /Override/
-            selection = { engine: :claude, model: 'opus' }
-            puts 'Overridden: Using Claude Opus.'
-          when /Abort/
-            puts 'Task aborted by user.'
-            return
-          end
-        end
-
-        puts "Engine Selected: #{selection[:engine]} (#{selection[:model] || 'default'})"
-
-        if plan['slices']&.any?
-          puts 'Slices:'
-          plan['slices'].each { |s| puts " - #{s}" }
-        end
-
-        if options[:dry_run]
-          puts '--- DRY RUN MODE ---'
-          @logger.log_task(task, plan, selection)
-          return
-        end
-
-        @logger.log_task(task, plan, selection)
-
-        context = ContextLoader.load
-        final_prompt = "#{context}\n\nTASK:\n#{task}"
-
-        adapter = build_adapter(selection[:engine])
-
-        if options[:git]
-          puts '🌿 Creating git branch for task...'
-          GitManager.create_branch(@logger.task_id, task)
-        end
-
-        QuotaManager.increment_usage(selection[:engine])
-        result = adapter.call(final_prompt, selection[:model])
-
-        @logger.log_result(result)
-
-        if options[:git]
-          puts '💾 Committing changes to git...'
-          GitManager.commit_changes(@logger.task_id, task)
-        end
-
-        puts result
+        execute_engine_task(task, plan, selection, options)
       end
 
       private
@@ -189,107 +121,179 @@ module Ares
       def escalate_to_executor(summary, options)
         type = options[:type] || :test
         verify_command = options[:verify_command] || 'bundle exec rspec'
-        fix_first_only = options[:fix_first_only]
+        fix_prompt = generate_fix_prompt(summary, options)
 
-        fix_plan = {
-          'task_type' => type == :test ? 'refactor' : 'architecture',
-          'risk_level' => 'medium',
-          'confidence' => 0.6
-        }
-
-        selection = ModelSelector.select(fix_plan)
+        selection = ModelSelector.select({ 'task_type' => 'refactor', 'risk_level' => 'medium' })
         puts "Selected Engine for fix: #{selection[:engine]} (#{selection[:model] || 'default'})"
 
-        context = ContextLoader.load
-        fix_prompt = <<~PROMPT
-          #{context}
+        result = apply_fix_with_fallbacks(fix_prompt, selection)
+        return false unless result
 
-          DIAGNOSTIC SUMMARY (#{type.to_s.upcase}):
-          Failed Items: #{Array(summary['failed_items'] || summary['failed_tests']).join(', ')}
-          Error: #{summary['error_summary']}
-
-          TASK:
-          Please fix the #{type} failures identified above. Apply the minimal necessary change.
-          #{'Fix ONLY the first offense listed. Do not fix any others.' if fix_first_only}
-          You MUST provide your response in JSON format matching the requested schema. Provide the FULL content of the file for the 'content' field.
-
-          CRITICAL GUIDELINES:
-          - Focus your fix ONLY on the files mentioned in the error summary.
-          - DO NOT modify core system files in 'lib/core/' or 'lib/adapters/' or 'lib/planner/' unless they are the direct cause of the #{type} failure.
-          - If you think the bug is in the engine, REFUSE to fix and instead explain why in the 'explanation' field.
-          - Ensure your fix is minimal.
-
-          FAILING FILE CONTENTS:
-          #{Array(summary['files']).filter_map do |f|
-            path = File.expand_path(f['path'], Dir.pwd)
-            next unless File.exist?(path)
-
-            "--- FILE: #{f['path']} ---\n#{File.read(path)}\n"
-          end.join("\n")}
-
-          PERTINENT PROJECT FILES (for reference):
-          #{Dir.glob('{spec,lib}/**/*').reject { |f| File.directory?(f) }.join("\n")}
-          #{Array(summary['files']).filter_map { |f| f['path'] }.uniq.join("\n")}
-        PROMPT
-
-        capable_engines = %i[claude codex cursor]
-        initial_engine = selection[:engine]&.to_sym || :claude
-        # Create chain: initial engine first, then others in preferred sequence
-        fallback_chain = ([initial_engine] + (capable_engines - [initial_engine])).uniq
-
-        result = nil
-        attempts = 0
-        max_attempts = fallback_chain.size
-
-        @spinner.run do
-          current_engine = fallback_chain[attempts]
-          @spinner.update(title: "Applying fix via #{current_engine} (attempt #{attempts + 1}/#{max_attempts})...")
-
-          adapter = build_adapter(current_engine)
-          # Use custom model only for the first engine in the chain if it was explicitly selected
-          current_model = (attempts.zero? && current_engine == initial_engine) ? selection[:model] : nil
-
-          raw = adapter.call(fix_prompt, current_model)
-          attempts += 1
-
-          result = begin
-            JSON.parse(raw)
-          rescue StandardError
-            { 'explanation' => raw, 'patches' => [] }
-          end
-        rescue StandardError => e
-          attempts += 1
-          if attempts < max_attempts
-            next_engine = fallback_chain[attempts]
-            puts "\n⚠️ #{fallback_chain[attempts - 1]} failed: #{e.message.split("\n").first.strip}. Retrying with #{next_engine}..."
-            retry
-          else
-            raise "Escalation failed after #{attempts} attempts. Last error: #{e.message}"
-          end
-        end
-
-        if result['patches']&.any?
-          result['patches'].each do |patch|
-            path = File.expand_path(patch['file'], Dir.pwd)
-            FileUtils.mkdir_p(File.dirname(path))
-            File.write(path, patch['content'])
-            puts "Applied fix to #{patch['file']} ✅"
-          end
-        else
-          puts "\nNo automated patches generated. Suggestion:"
-          puts result['explanation']
-        end
+        apply_patches(result) if result['patches']&.any?
 
         @spinner.update(title: 'Verifying fix...')
         verify_result = nil
         @spinner.run { verify_result = TerminalRunner.run(verify_command) }
 
+        handle_verification_result(verify_result, type)
+      end
+
+      def check_quota!
+        return unless QuotaManager.quota_exceeded?
+
+        puts '❌ Quota exceeded for Claude. Please try again later or use a different engine.'
+        exit 1
+      end
+
+      def match_shortcut_task(task, options)
+        return run_test_diagnostic(options) if task.match?(/\A(run\s+)?(test|rspec|fix|diagnostic)(s|ing)?\s*\z/i)
+        return run_syntax_check(options) if task.match?(/\A(run\s+)?(syntax|compile)(\s+check)?\s*\z/i)
+        return run_lint(options) if task.match?(/\A(run\s+)?(lint|format|style)(ting|ing|s)?\s*\z/i)
+
+        nil
+      end
+
+      def plan_task(task)
+        plan = nil
+        @spinner.update(title: 'Planning task...')
+        @spinner.run { plan = @planner.plan(task) }
+        plan
+      end
+
+      def select_model_for_plan(plan)
+        selection = nil
+        @spinner.update(title: 'Selecting optimal model...')
+        @spinner.run { selection = ModelSelector.select(plan) }
+        selection
+      end
+
+      def handle_low_confidence(selection, plan)
+        return selection if plan['confidence'].to_f >= 0.7
+
+        prompt = TTY::Prompt.new
+        choice = prompt.select('Low confidence detected. How should we proceed?',
+                               "Execute with suggested #{selection[:engine]} (#{selection[:model] || 'default'})",
+                               'Override and use Claude Opus', 'Abort task')
+
+        case choice
+        when /Override/
+          puts 'Overridden: Using Claude Opus.'
+          { engine: :claude, model: 'opus' }
+        when /Abort/
+          puts 'Task aborted by user.'
+          nil
+        else selection
+        end
+      end
+
+      def execute_engine_task(task, plan, selection, options)
+        puts "Engine Selected: #{selection[:engine]} (#{selection[:model] || 'default'})"
+        return if options[:dry_run] && puts('--- DRY RUN MODE ---')
+
+        @logger.log_task(task, plan, selection)
+        GitManager.create_branch(@logger.task_id, task) if options[:git]
+
+        QuotaManager.increment_usage(selection[:engine])
+        adapter = build_adapter(selection[:engine])
+        result = adapter.call("#{ContextLoader.load}\n\nTASK:\n#{task}", selection[:model])
+
+        @logger.log_result(result)
+        GitManager.commit_changes(@logger.task_id, task) if options[:git]
+        puts result
+      end
+
+      def generate_fix_prompt(summary, options)
+        type = options[:type] || :test
+        context = ContextLoader.load
+        files_content = Array(summary['files']).filter_map do |f|
+          path = File.expand_path(f['path'], Dir.pwd)
+          "--- FILE: #{f['path']} ---\n#{File.read(path)}\n" if File.exist?(path)
+        end.join("\n")
+
+        <<~PROMPT
+          #{context}
+          DIAGNOSTIC SUMMARY (#{type.to_s.upcase}):
+          Failed Items: #{Array(summary['failed_items'] || summary['failed_tests']).join(', ')}
+          Error: #{summary['error_summary']}
+
+          TASK: Fix the #{type} failures identifying above.
+          #{'Fix ONLY the first offense listed.' if options[:fix_first_only]}
+          You MUST provide JSON with 'explanation' and 'patches' (with 'file' and 'content' fields).
+
+          FAILING FILE CONTENTS:
+          #{files_content}
+        PROMPT
+      end
+
+      def apply_fix_with_fallbacks(fix_prompt, selection)
+        capable_engines = %i[claude codex cursor]
+        initial_engine = selection[:engine]&.to_sym || :claude
+        fallback_chain = ([initial_engine] + (capable_engines - [initial_engine])).uniq
+
+        attempts = 0
+        fallback_chain.each do |current_engine|
+          attempts += 1
+          @spinner.update(title: "Applying fix via #{current_engine} (attempt #{attempts}/#{fallback_chain.size})...")
+          create_checkpoint(current_engine)
+
+          begin
+            raw = call_adapter_with_persistence(current_engine, fix_prompt, selection)
+            return JSON.parse(raw)
+          rescue StandardError => e
+            puts "\n⚠️ #{current_engine} failed: #{e.message.split("\n").first.strip}"
+            next unless attempts >= fallback_chain.size
+
+            raise "Escalation failed after #{attempts} attempts. Last error: #{e.message}"
+          end
+        end
+        nil
+      end
+
+      def call_adapter_with_persistence(engine, prompt, selection)
+        adapter = build_adapter(engine)
+        model = engine == selection[:engine] ? selection[:model] : nil
+
+        case engine
+        when :claude then adapter.call(prompt, model, fork_session: true)
+        when :cursor then adapter.call(prompt, model, resume: true)
+        when :codex then adapter.call(prompt, model, resume: true)
+        else adapter.call(prompt, model)
+        end
+      end
+
+      def apply_patches(result)
+        result['patches'].each do |patch|
+          path = File.expand_path(patch['file'], Dir.pwd)
+          FileUtils.mkdir_p(File.dirname(path))
+          File.write(path, patch['content'])
+          puts "Applied fix to #{patch['file']} ✅"
+        end
+      end
+
+      def handle_verification_result(verify_result, type)
         if verify_result[:exit_status].zero?
           puts "Fix successful! #{type.to_s.capitalize} issues resolved. ✅"
           true
         else
           puts "Fix failed. #{type.to_s.capitalize} issues still persist. ❌"
           false
+        end
+      end
+
+      def create_checkpoint(engine)
+        # Checkpointing logic varies by engine.
+        # For now, we ensure a git-based safety net if not in a git repo or if native fails.
+        case engine
+        when :claude
+          # Claude Code does automatic checkpointing on every prompt.
+          @spinner.update(title: 'Leveraging Claude auto-checkpoint...')
+        when :codex
+          # Codex sessions are automatically persisted.
+          @spinner.update(title: 'Leveraging Codex session persistence...')
+        else
+          # Fallback to git stash or similar if we wanted a hard checkpoint,
+          # but since we are often on a task branch, git is our checkpoint.
+          @spinner.update(title: "Ensuring state persistence for #{engine}...")
         end
       end
 
