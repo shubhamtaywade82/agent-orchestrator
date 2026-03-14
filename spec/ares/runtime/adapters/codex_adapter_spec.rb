@@ -2,14 +2,22 @@
 
 RSpec.describe Ares::Runtime::CodexAdapter do
   before do
-    allow(Open3).to receive(:capture2e).and_return(['output', double(success?: true, exitstatus: 0)])
+    stdin = double('stdin')
+    allow(stdin).to receive(:write)
+    allow(stdin).to receive(:close)
+    outerr = double('outerr', read: 'output')
+    wait_thr = double('wait_thr', value: double(success?: true, exitstatus: 0))
+    allow(Open3).to receive(:popen2e).and_yield(stdin, outerr, wait_thr)
+    allow_any_instance_of(Ares::Runtime::BaseAdapter).to receive(:run_command_in_fork) do |receiver, cmd, prompt|
+      receiver.send(:run_command, cmd, prompt)
+    end
   end
 
   describe '#call' do
     it 'builds codex exec command' do
       adapter = described_class.new
       adapter.call('prompt')
-      expect(Open3).to have_received(:capture2e) do |*args|
+      expect(Open3).to have_received(:popen2e) do |*args|
         args.include?('codex') && args.include?('exec') && args.include?('--full-auto')
       end
     end

@@ -3,8 +3,20 @@
 RSpec.describe Ares::Runtime::BaseAdapter do
   let(:adapter) { Ares::Runtime::CodexAdapter.new }
 
+  def stub_popen2e
+    stdin = double('stdin')
+    allow(stdin).to receive(:write)
+    allow(stdin).to receive(:close)
+    outerr = double('outerr', read: 'output')
+    wait_thr = double('wait_thr', value: double(success?: true, exitstatus: 0))
+    allow(Open3).to receive(:popen2e).and_yield(stdin, outerr, wait_thr)
+  end
+
   before do
-    allow(Open3).to receive(:capture2e).and_return(['output', double(success?: true, exitstatus: 0)])
+    stub_popen2e
+    allow_any_instance_of(Ares::Runtime::BaseAdapter).to receive(:run_command_in_fork) do |receiver, cmd, prompt|
+      receiver.send(:run_command, cmd, prompt)
+    end
   end
 
   describe '#call' do

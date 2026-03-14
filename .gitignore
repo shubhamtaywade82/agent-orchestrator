@@ -14,3 +14,4 @@ Gemfile.lock
 tmp/
 .env
 coverage
+plan.json

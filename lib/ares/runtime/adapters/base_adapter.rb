@@ -2,6 +2,7 @@
 
 require 'open3'
 require 'timeout'
+require 'ostruct'
 
 module Ares
   module Runtime
@@ -28,15 +29,52 @@ module Ares
       end
 
       def run_with_timeout(cmd, prompt)
-        Timeout.timeout(timeout_seconds) { run_command(cmd, prompt) }
+        if Process.respond_to?(:fork) && !Gem.win_platform?
+          run_command_in_fork(cmd, prompt)
+        else
+          Timeout.timeout(timeout_seconds) { run_command(cmd, prompt) }
+        end
       rescue Timeout::Error => e
         raise "#{adapter_name} timed out after #{timeout_seconds}s: #{e.message}"
       end
 
-      def run_command(cmd, prompt)
-        return Open3.capture2e(*cmd, stdin_data: prompt) if pipes_prompt_to_stdin?
+      # Run in fork so Timeout in parent never closes pipes used by Open3 (avoids
+      # "stream closed in another thread" when Timeout fires during capture2e/popen2e).
+      def run_command_in_fork(cmd, prompt)
+        reader, writer = IO.pipe
+        pid = fork do
+          reader.close
+          output, status = run_command(cmd, prompt)
+          writer.write(Marshal.dump([output, status.success?, status.exitstatus]))
+        end
+        writer.close
+        begin
+          result = Timeout.timeout(timeout_seconds) { Marshal.load(reader.read) }
+        rescue Timeout::Error
+          Process.kill(:TERM, pid)
+          Process.wait(pid)
+          raise
+        end
+        reader.close
+        Process.wait(pid)
+        output, success, exitstatus = result
+        status = OpenStruct.new(success?: success, exitstatus: exitstatus)
+        [output, status]
+      end
 
-        Open3.capture2e(*cmd)
+      def run_command(cmd, prompt)
+        stdin_data = pipes_prompt_to_stdin? ? prompt : nil
+        capture2e_single_thread(cmd, stdin_data)
+      end
+
+      # Single-threaded capture to avoid "stream closed in another thread" when used
+      # after TTY::Prompt / TTY::Spinner or under Timeout (Open3.capture2e uses a reader thread).
+      def capture2e_single_thread(cmd, stdin_data)
+        Open3.popen2e(*cmd) do |stdin, outerr, wait_thr|
+          stdin.write(stdin_data) if stdin_data
+          stdin.close
+          [outerr.read, wait_thr.value]
+        end
       end
 
       def handle_errors(status, output)
