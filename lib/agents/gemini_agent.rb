@@ -3,7 +3,7 @@
 module Ares
   module Agents
     class GeminiAgent
-      def self.run(_task)
+      def self.run(_task, context: nil)
         # Future: Gemini repo analysis integration
       end
     end

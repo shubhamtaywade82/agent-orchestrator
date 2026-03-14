@@ -1,0 +1,32 @@
+[
+  {
+    "id": "d076907a-6504-4fbc-b495-22750123a3f0",
+    "type": "architecture",
+    "payload": "build ruby mastery agent",
+    "depends_on": []
+  },
+  {
+    "id": "0473a834-4d5f-4f0a-999e-7f510272d827",
+    "type": "code_generation",
+    "payload": "build ruby mastery agent",
+    "depends_on": [
+      "d076907a-6504-4fbc-b495-22750123a3f0"
+    ]
+  },
+  {
+    "id": "f5b46d85-50f5-433c-ad73-78e1b165f45b",
+    "type": "code_generation",
+    "payload": "build ruby mastery agent (write tests)",
+    "depends_on": [
+      "0473a834-4d5f-4f0a-999e-7f510272d827"
+    ]
+  },
+  {
+    "id": "d58666bf-3e92-4620-ac7c-5a2bef752933",
+    "type": "architecture",
+    "payload": "Review: build ruby mastery agent",
+    "depends_on": [
+      "f5b46d85-50f5-433c-ad73-78e1b165f45b"
+    ]
+  }
+]

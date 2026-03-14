@@ -3,7 +3,7 @@
 module Ares
   module Agents
     class CodexAgent
-      def self.run(_task)
+      def self.run(_task, context: nil)
         # Future: Codex / GitHub Copilot integration
       end
     end
