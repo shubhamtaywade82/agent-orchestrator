@@ -17,6 +17,10 @@ gem 'tty-spinner'
 gem 'tty-table'
 gem 'yaml'
 
+# MVP: CLI and AST
+gem 'thor'
+gem 'parser'
+
 gem 'rubocop'
 gem 'rubocop-performance'
 gem 'rubocop-rake'
