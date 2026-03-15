@@ -1,32 +1,32 @@
 [
   {
-    "id": "d231a4f1-80a0-437e-9fc0-01c9cbe005f4",
+    "id": "f607fbad-7281-448f-997a-4957d57c9254",
     "type": "architecture",
-    "payload": "build ruby mastery agent",
+    "payload": "build feature",
     "depends_on": []
   },
   {
-    "id": "6172fc25-2cb0-49d9-83ff-66e23a1212e2",
+    "id": "0d902129-8369-424d-a17b-b3dc52e69e6b",
     "type": "code_generation",
-    "payload": "build ruby mastery agent",
+    "payload": "build feature",
     "depends_on": [
-      "d231a4f1-80a0-437e-9fc0-01c9cbe005f4"
+      "f607fbad-7281-448f-997a-4957d57c9254"
     ]
   },
   {
-    "id": "83284e5a-c229-49c8-a379-2ab03452b961",
+    "id": "44a7ce29-81aa-4875-88d1-74f1baa08421",
     "type": "code_generation",
-    "payload": "build ruby mastery agent (write tests)",
+    "payload": "build feature (write tests)",
     "depends_on": [
-      "6172fc25-2cb0-49d9-83ff-66e23a1212e2"
+      "0d902129-8369-424d-a17b-b3dc52e69e6b"
     ]
   },
   {
-    "id": "801e529b-02dc-447b-843a-f23c8f9a841b",
+    "id": "541941a2-7013-4909-9395-2cc1357da50c",
     "type": "architecture",
-    "payload": "Review: build ruby mastery agent",
+    "payload": "Review: build feature",
     "depends_on": [
-      "83284e5a-c229-49c8-a379-2ab03452b961"
+      "44a7ce29-81aa-4875-88d1-74f1baa08421"
     ]
   }
 ]

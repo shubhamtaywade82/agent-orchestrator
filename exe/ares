@@ -42,16 +42,18 @@ module Ares
       options = {
         dry_run: false,
         git: false,
-        tui: false
+        tui: false,
+        interactive: false
       }
 
       OptionParser.new do |opts|
         opts.banner = 'Usage: ares [options] "task description"'
 
-        opts.on('-d', '--dry-run')    { options[:dry_run] = true }
-        opts.on('-g', '--git')        { options[:git] = true }
-        opts.on('--tui')              { options[:tui] = true }
-        opts.on('--fail-fast')        { options[:fail_fast] = true }
+        opts.on('-d', '--dry-run')       { options[:dry_run] = true }
+        opts.on('-g', '--git')           { options[:git] = true }
+        opts.on('--tui')                 { options[:tui] = true }
+        opts.on('-i', '--interactive')   { options[:interactive] = true }
+        opts.on('--fail-fast')           { options[:fail_fast] = true }
       end.parse!
 
       if options[:tui]

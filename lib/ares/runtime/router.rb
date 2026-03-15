@@ -102,18 +102,60 @@ module Ares
         GitManager.create_branch(@core.logger.task_id, task) if options[:git]
 
         fallback = EngineChain.build_fallback(selection[:engine] || :claude)
-        prompt = PromptBuilder.new
-                              .add_context(ContextLoader.load)
-                              .add_task(task)
-                              .build
+        prompt_builder = PromptBuilder.new.add_context(ContextLoader.load).add_task(task)
+        prompt_builder.add_instruction('Do not ask clarifying questions. If the task is ambiguous, assume the most common interpretation and proceed. Output only the requested deliverable.') unless options[:interactive]
+        prompt = prompt_builder.build
 
-        adapter_opts = { model: selection[:model], fork_session: true, resume: true, cloud: options[:cloud] }
+        adapter_opts = { model: selection[:model], fork_session: true, resume: true, cloud: options[:cloud], interactive: options[:interactive] }
 
-        output = fallback[:chain].call(prompt, adapter_opts, total: fallback[:size])
-        @core.logger.log_result(output)
+        if options[:interactive]
+          run_interactive_loop(fallback, prompt, adapter_opts, options)
+        else
+          output = fallback[:chain].call(prompt, adapter_opts, total: fallback[:size])
+          @core.logger.log_result(output)
+          GitManager.commit_changes(@core.logger.task_id, task) if options[:git]
+          puts output
+        end
+      end
 
-        GitManager.commit_changes(@core.logger.task_id, task) if options[:git]
-        puts output
+      # Agent CLIs are typically one-shot (read prompt, print response, exit). So we run
+      # the agent again for each user reply, passing conversation history in the prompt.
+      def run_interactive_loop(fallback, initial_prompt, adapter_opts, options)
+        conversation = []
+        prompt = initial_prompt
+        max_turns = 10
+
+        max_turns.times do
+          opts = adapter_opts.merge(interactive: false)
+          opts[:timeout_seconds] = 120 if conversation.any?  # follow-up turns have large context
+          output = fallback[:chain].call(prompt, opts, total: fallback[:size])
+          @core.logger.log_result(output)
+          puts output
+
+          break unless asks_question?(output)
+
+          reply = prompt_user_reply
+          break if reply.nil? || reply.strip.empty? || reply.strip.match?(/\A(done|exit|quit|q)\z/i)
+
+          conversation << "Agent: #{output}" << "User: #{reply}"
+          prompt = "#{initial_prompt}\n\n--- Conversation so far ---\n#{conversation.join("\n\n")}\n\n--- Continue (respond to the user's last message) ---"
+        end
+
+        GitManager.commit_changes(@core.logger.task_id, ARGV.join(' ')) if options[:git]
+      end
+
+      def asks_question?(text)
+        return false if text.nil? || text.empty?
+
+        trimmed = text.strip
+        last_line = trimmed.lines.map(&:strip).reject(&:empty?).last
+        last_line&.end_with?('?') || trimmed.include?('(y/n)') || trimmed.include?('work for you')
+      end
+
+      def prompt_user_reply
+        print "\nYou: "
+        $stdout.flush
+        $stdin.gets
       end
 
     end

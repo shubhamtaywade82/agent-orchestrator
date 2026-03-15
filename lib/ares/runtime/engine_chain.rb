@@ -4,12 +4,13 @@ require_relative 'adapters/claude_adapter'
 require_relative 'adapters/codex_adapter'
 require_relative 'adapters/cursor_adapter'
 require_relative 'adapters/ollama_adapter'
+require_relative 'adapters/ruby_mastery_adapter'
 
 module Ares
   module Runtime
     # Chain of Responsibility Handler linking CLI engines for automated fallback.
     class EngineChain
-      CAPABLE_ENGINES = %w[claude codex cursor ollama].freeze
+      CAPABLE_ENGINES = %w[claude codex cursor ollama ruby_mastery].freeze
 
       attr_accessor :next_handler
       attr_reader :engine_name
@@ -91,18 +92,20 @@ module Ares
 
       def get_adapter(engine)
         case engine
-        when 'claude' then Ares::Runtime::ClaudeAdapter.new
-        when 'cursor' then Ares::Runtime::CursorAdapter.new
-        when 'codex'  then Ares::Runtime::CodexAdapter.new
-        when 'ollama' then Ares::Runtime::OllamaAdapter.new
+        when 'claude'        then Ares::Runtime::ClaudeAdapter.new
+        when 'cursor'        then Ares::Runtime::CursorAdapter.new
+        when 'codex'         then Ares::Runtime::CodexAdapter.new
+        when 'ollama'        then Ares::Runtime::OllamaAdapter.new
+        when 'ruby_mastery'  then Ares::Runtime::RubyMasteryAdapter.new
         else raise "Unknown engine: #{engine}"
         end
       end
 
       def adapter_options(options)
         opts = {}
+        opts[:interactive] = options[:interactive] if options.key?(:interactive)
         case @engine_name
-        when 'claude'
+        when 'claude', 'ruby_mastery'
           opts[:fork_session] = options[:fork_session] if options.key?(:fork_session)
         when 'cursor'
           opts[:resume] = options.fetch(:resume, true)

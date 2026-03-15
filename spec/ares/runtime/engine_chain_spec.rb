@@ -5,7 +5,14 @@ RSpec.describe Ares::Runtime::EngineChain do
     it 'returns chain and size for given engine' do
       result = described_class.build_fallback(:claude)
       expect(result[:chain]).to be_a(described_class)
-      expect(result[:size]).to eq(4)
+      expect(result[:size]).to eq(5)
+    end
+
+    it 'uses RubyMasteryAdapter when engine is ruby_mastery' do
+      result = described_class.build_fallback(:ruby_mastery)
+      expect(result[:chain].engine_name).to eq('ruby_mastery')
+      adapter = result[:chain].instance_variable_get(:@adapter)
+      expect(adapter).to be_a(Ares::Runtime::RubyMasteryAdapter)
     end
 
     it 'puts initial engine first in fallback order' do

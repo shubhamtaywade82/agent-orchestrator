@@ -23,3 +23,7 @@ interactive_edit:
 
 pr_automation:
   engine: codex
+
+ruby_mastery:
+  engine: ruby_mastery
+  model: sonnet
